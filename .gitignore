@@ -1,0 +1,37 @@
+# Machine-specific identities and credentials
+local-settings.json
+local-settings.tmp
+.env
+.env.*
+!.env.example
+*credentials*
+*token*.json
+# Local runtime and diagnostic captures
+output/
+logs/
+*.log
+*.jsonl
+*.wav
+*.pcm
+*.adpcm
+*.bin
+*.dmp
+*.mp3
+*.mp4
+*.dll
+*.exe
+*.zip
+*.msi
+*.pfx
+*.pem
+*.key
+# Environments / build products
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+desktop-ui/web/node_modules/
+desktop-ui/web/dist/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

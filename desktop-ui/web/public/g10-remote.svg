@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 540" role="img" aria-label="G10 remote schematic">
+<rect x="26" y="8" width="148" height="524" rx="70" fill="#253441"/>
+<rect x="38" y="24" width="124" height="477" rx="57" fill="#314452"/>
+<g fill="#d4e5e8" font-family="sans-serif" text-anchor="middle" font-size="15">
+<text x="100" y="65" fill="#ff6767">⏻</text><text x="70" y="108">▶</text><text x="132" y="108">↩</text>
+<circle cx="100" cy="196" r="65" fill="none" stroke="#f49b59" stroke-width="5"/>
+<text x="100" y="151">▲</text><text x="52" y="201">◀</text><text x="149" y="201">▶</text><text x="100" y="248">▼</text>
+<circle cx="100" cy="196" r="29" fill="#253441"/><text x="100" y="201">OK</text>
+<text x="66" y="294">⌂</text><text x="135" y="294">☰</text>
+<text x="62" y="350">PAGE</text><text x="141" y="350">VOL</text>
+<circle cx="100" cy="365" r="23" fill="#253441"/>
+<rect x="96" y="351" width="8" height="15" rx="4" fill="#ff6767"/>
+<path d="M90 360v4a10 10 0 0 0 20 0v-4M100 375v7" fill="none" stroke="#ff6767" stroke-width="3"/>
+<text x="68" y="427">DEL</text><text x="133" y="427">静音</text>
+<text x="100" y="478" font-size="11" fill="#9bb5bf">G10 示意图</text></g></svg>

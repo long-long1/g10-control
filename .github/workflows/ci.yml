@@ -1,0 +1,27 @@
+name: Windows source checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  offline-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: desktop-ui/web/package-lock.json
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -p "test_*.py" -v
+      - run: python -m unittest discover -s desktop-ui -p test_runtime.py -v
+      - run: npm ci
+        working-directory: desktop-ui/web
+      - run: npm run build
+        working-directory: desktop-ui/web
