@@ -33,5 +33,7 @@ __pycache__/
 desktop-ui/web/node_modules/
 desktop-ui/web/dist/
 *.tsbuildinfo
+build/portable_onedir/
+dist/
 .DS_Store
 Thumbs.db

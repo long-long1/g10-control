@@ -1,0 +1,3 @@
+# Build-only tools. Install into the repository's .venv, never global Python.
+-r requirements.txt
+PyInstaller==6.22.3

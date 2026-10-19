@@ -8,7 +8,7 @@
 - 审查时分支：`main`，审查前工作树干净，且跟踪 `origin/main`。
 - 审查时提交：`8d170a337b12956a5b9bb6382b44b11790f23189` (`Make IMA decoder independent of external reference checkout`，2026-10-19)。
 - 本文件随本阶段提交进入仓库；该提交标识由 Git 提交记录和最终交接报告给出。
-- 架构为 Python + pywebview / WebView2 + React / TypeScript；音频桥接是独立 Python 子进程。没有 PyInstaller spec、构建脚本或便携发布目录。
+- 架构为 Python + pywebview / WebView2 + React / TypeScript；音频桥接是独立 Python 子进程。本轮新增 PyInstaller 初稿 spec/脚本和独立路径管理模块，但尚未接入现有桌面运行时。
 
 ## 2. 功能状态（按现有证据分类）
 
@@ -135,3 +135,53 @@ PyInstaller `onedir`（建议先 `--onedir --noconfirm --clean`，后续固定 `
 - 红键自动唤起豆包、按键映射、自动重连/休眠恢复。
 - Portable ZIP 的隐私扫描、完整第三方许可证/SBOM 和公开发布审核。
 - README/HANDOFF 中已记录的旧实机成功链路不能冒充本次测试结果；本次没有连接设备。
+
+## 10. 后续准备进展（2026-10-19）
+
+本轮基于上面的基线提交 `78c053381cd804aaa08ddb32e8dee679036ddd76` 开展。工作环境为 Windows 11 x64、全局 Python 3.12.10；仓库虚拟环境为 `.venv`（Git 忽略），未向全局 Python 安装包。
+
+### 新增文件
+
+- `portable_paths.py`：独立路径 resolver，未被 `app_runtime.py` 或桥接引用。
+- `test_portable_paths.py`：4 个纯临时目录测试，涵盖移动便携目录后读回 data、模拟便携目录不可写并回退、源码/冻结资源与 exe 目录分离、资源/data 路径越界拒绝及数据保存。
+- `requirements-build.txt`：引用 `requirements.txt` 并固定构建工具 `PyInstaller==6.22.3`；单独用于构建环境。
+- `build/portable_onedir.spec`：主程序与 `g10_audio_bridge.py` 两个入口构建到同一个 onedir 输出树；主 EXE 静态资源目的地是 `web/dist`，对应当前 `app.py` 冻结路径预期 `<_MEIPASS>/web/dist/index.html`。
+- `build/build_portable.ps1`：在仓库 `.venv` 中执行前端 `npm ci` / `npm run build`，再调用 spec；不会修改系统设置或生成 ZIP。
+- `.gitignore`：忽略 PyInstaller 中间文件和 `dist/` 构建产物。
+
+### 路径模块接口
+
+```python
+from portable_paths import resolve_paths
+
+paths = resolve_paths()  # source / frozen 自动判断
+ui_file = paths.resource("web/dist/index.html")
+settings_file = paths.data_path("settings.json")
+```
+
+`RuntimePaths` 区分 `resource_dir`、`executable_dir`、`data_dir`。源码模式资源根来自模块位置；冻结模式资源根来自 PyInstaller `sys._MEIPASS`（可注入覆盖）；exe 目录来自 `sys.executable`。默认在 exe 同级存在 `portable.marker` 时启用便携模式，先对同级 `data/` 做创建和真实临时写入探测；探测报 `OSError` 时回退到 `%LOCALAPPDATA%\G10Control`。`RuntimePaths.resource()` 与 `data_path()` 均阻止 `..` 越界。测试通过注入 `probe_writable` 模拟 ACL/只读失败，不改真实 ACL。模块目前是准备件，未影响现有配置、日志、设备身份或桥接路径。
+
+### Python 环境与测试结果
+
+- 创建仓库独立 `.venv`，使用 `python -m pip install --upgrade pip` 及 `.venv\Scripts\python.exe -m pip install -r requirements.txt`。`comtypes 1.4.17`、WinRT 3.2.1 组件、`sounddevice 0.5.6`、`psutil 7.2.2` 均按项目固定版本成功安装；未改 `requirements.txt`，未用全局 Python。
+- `\.venv\Scripts\python.exe -m unittest discover -p "test_*.py" -v`（仓库根目录）：**43 run, 43 passed, 0 failures, 0 errors, 0 skipped**；包含新增 4 项路径测试及原有 39 项离线测试。
+- `..\.venv\Scripts\python.exe -m unittest -v test_runtime`（`desktop-ui`）：**5 run, 5 passed, 0 failures, 0 errors, 0 skipped**。
+- 上述测试只覆盖离线替身/本地逻辑；handshake、设备、声卡测试没有连接 BLE、打开硬件音频端点或修改音频设置。通过不代表实机或便携环境验证。
+
+### PyInstaller 初稿构建结果
+
+- 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\build\build_portable.ps1`：React `npm ci` 与 `npm run build` 均通过（Vite 构建 1578 modules）。首次 PyInstaller 尝试因 spec 对 `SPECPATH` 的目录层级假设错误，在 Analysis 前退出。修正后第一轮 Analysis 成功但 `COLLECT` 收参错误（TOC 项被展平）；再次修正 spec 后才完成最终构建。
+- 执行 `\.venv\Scripts\python.exe -m PyInstaller --noconfirm .\build\portable_onedir.spec`：**退出码 0，PyInstaller 6.22.3 Build complete**。生成 `dist\G10-Control\G10-Control.exe`、`G10-AudioBridge.exe`、`_internal\` 及 `_internal\web\dist\index.html` 和相对资源。初稿静态资源目标路径与现有 `APP/web/dist/index.html` 冻结预期相符。
+- PyInstaller Analysis 有警告，包括 Windows 目标下可选 POSIX 模块、若干 WinRT 子模块和 `pycparser.lextab/yacctab` 未发现。Warning 文件在被忽略的 `build/portable_onedir/` 中。需核查哪些是可选项并在无硬件条件下验证各模块导入。
+- 这里只确认 spec 能完成分析、exe 组装和 onedir 收集。**没有启动生成的任一 EXE**；也未证明 helper 被现有 supervisor 正确调用、WebView2 能启动、冻结 WinRT 能工作、托盘/安全退出有效或音频可用。因此它不是已运行验证或 Portable 产品验收。
+
+### 本轮仍未解决及下一轮优先任务
+
+1. 优先完善 `portable_paths.py` 的测试/接口评审，再以最小 diff 接入 `desktop-ui/app_runtime.py`，让设置、日志、桥接状态与资源目录使用统一 resolver；不要改 `g10_audio_bridge.py` 音频算法和协议。补上源码模式和冻结模式的路径回归测试。
+2. 修正 `app_runtime.py` 子进程启动器：onedir 下从 exe 同级定位 `G10-AudioBridge.exe`（当前 spec 的实际同级输出），源码模式仍保留现有脚本路径；对命令构造加假进程测试。评估按键观察 helper 是否需要独立打包，不能声称现有 `.venv` 路径已解决。
+3. 逐项检查本次 `build/portable_onedir/warn-portable_onedir.txt` 的 WinRT/Python 运行时告警，并先增加无硬件的冻结导入/启动诊断；在用户明确允许前不进行 BLE 或设备音频验证。
+4. spec 当前把主 EXE 与桥接 EXE 汇入同一 `dist/G10-Control` 并共享 `_internal`，但没有运行兼容性验证。先在不启动服务的约束下完成 UI/WebView2 启动评审和 helper 参数入口，再做纯本地冻结程序启动/退出验证。
+5. `portable_paths.py` 还未将 `portable.marker`/LocalAppData 选择接入运行时；`local_config.py` 仍从源文件相邻配置取设备身份；桥接仍要求开发工作区 `output/phase3-vbcable-probe`。设备发现/首次向导、WebView2 缺失提示、VB-CABLE 检测与新机路由证明均未实现。
+6. 项目总体许可证仍未确定。不得生成/发布 ZIP 或 Release，直到依赖许可与分发授权审查完成。
+
+本轮只改路径准备件、测试、构建准备、忽略规则和本文档；没有修改 `app_runtime.py`、`g10_audio_bridge.py`、协议、ADPCM 或设备配置流程。
