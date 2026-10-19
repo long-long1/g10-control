@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   AudioLines, AudioWaveform, Bluetooth, Check, ChevronRight, CircleHelp, CircleStop,
-  ClipboardList, Download, FileUp, Headphones, Home, Keyboard,
+  ClipboardList, Download, FileUp, Home, Keyboard,
   ListFilter, Mic2, Moon, MoreHorizontal, Power, Radio, RefreshCw, RotateCcw,
   Settings2, ShieldCheck, Sparkles, TriangleAlert, Volume2, WandSparkles,
 } from 'lucide-react';
 import { nativeAPI, type EventRow, type KeySnapshot, type Settings, type Snapshot } from './api';
 import { DevicePanel } from './DevicePanel';
+import { SetupWizard } from './SetupWizard';
+import { RoutePanel } from './RoutePanel';
 
 type Page = 'home' | 'voice' | 'keys' | 'settings' | 'logs';
 const DEFAULT_CABLE = '';
@@ -20,8 +22,9 @@ const starterSettings: Settings = {
 const emptySnapshot: Snapshot = {
   application:{name:'G10 Control',version:'0.1.0',single_instance:true},
   service:{running:false,connection:'stopped',detail:'等待启动',started_at:null,audio_active:false,processed_audio_seconds:0,input_level_dbfs:-120,cable_level_dbfs:-120,cable_peak:0,error_count:0,error:null},
-  device:{name:'G10',address:'',transport:'Bluetooth LE',vid:'0x620A',pid:'0x0407',battery:null},
+  device:{name:'未选择设备',address:'',transport:'Bluetooth LE',vid:null,pid:null,battery:null},
   device_setup:{state:'not_checked',message:'请扫描并选择设备；兼容性尚未验证。',selected:null,compatible:false,candidates:[],busy:false},
+  setup:{step:0,completed:false,ready:false,statuses:Array(5).fill('not_checked'),environment:[],data_directory:'',portable:false,fallback_reason:null},
   microphone:{name:'CABLE Output (VB-Audio Virtual Cable)',id:DEFAULT_CABLE,validated:false,is_active:false},
   audio_route:{state:'missing',message:'请检测本机 VB-CABLE 并确认合成验证。',validated:false,pair:null,verified_at:null,proof_path:'',confirmation_token:null},
   settings:starterSettings,runtime:{log_directory:'',service_log_directory:null},
@@ -51,6 +54,7 @@ export default function App(){
   const [autostart,setAutostart]=useState(false);
   const [connectedToHost,setConnectedToHost]=useState(false);
   const [busy,setBusy]=useState(false);
+  const [wizardOpen,setWizardOpen]=useState<boolean|null>(null);
   const [toast,setToast]=useState('');
   const [exitError,setExitError]=useState('');
   const api=nativeAPI();
@@ -107,6 +111,17 @@ export default function App(){
       const result=action==='scan'?await api.scan_ble_devices():action==='select'?await api.select_ble_device(identity):await api.check_ble_compatibility(true);
       setToast(result.message);await refresh();
     }catch(error){setToast(error instanceof Error?error.message:'设备操作失败');}
+    finally{setBusy(false);}
+  }
+  async function setupAction(action:'environment'|'step'|'finish',step=0){
+    if(!api)return setToast('向导需要运行桌面版。');
+    setBusy(true);
+    try{
+      if(action==='environment')await api.detect_environment();
+      else if(action==='step')await api.set_setup_step(step);
+      else {await api.complete_setup();setWizardOpen(false);setToast('本机配置完成，请按说明手动使用豆包语音。');}
+      await refresh();
+    }catch(error){setToast(error instanceof Error?error.message:'向导操作失败');}
     finally{setBusy(false);}
   }
   async function stopBridge(){
@@ -203,13 +218,14 @@ export default function App(){
       <div className="brand"><div className="brand-mark"><AudioWaveform size={21}/></div><div><strong>G10 <span>Control</span></strong><small>REMOTE CONSOLE</small></div></div>
       <div className="nav-group-label">设备管理</div>
       <nav className="side-nav" aria-label="主导航">
-        {pages.map(item=>{const Icon=item.icon;return <button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>setPage(item.id)}><Icon size={18}/><span>{item.label}</span>{item.id==='keys'&&<span className="nav-pill">只读</span>}</button>;})}
-        <button className={`nav-item ${page==='logs'?'active':''}`} onClick={()=>setPage('logs')}><ClipboardList size={18}/><span>日志与诊断</span></button>
+        <button className="nav-item" onClick={()=>setWizardOpen(true)}><ClipboardList size={18}/><span>设置向导 / 继续</span></button>
+        {pages.map(item=>{const Icon=item.icon;return <button key={item.id} className={`nav-item ${page===item.id?'active':''}`} onClick={()=>{setWizardOpen(false);setPage(item.id);}}><Icon size={18}/><span>{item.label}</span>{item.id==='keys'&&<span className="nav-pill">只读</span>}</button>;})}
+        <button className={`nav-item ${page==='logs'?'active':''}`} onClick={()=>{setWizardOpen(false);setPage('logs');}}><ClipboardList size={18}/><span>日志与诊断</span></button>
       </nav>
       <div className="sidebar-spacer"/>
       <div className="sidebar-device">
         <div className="sidebar-device-top"><span className={`status-dot ${liveMode?'good':state.service.connection==='starting'?'pending':''}`}/><span>{liveMode?'G10 已连接':state.service.connection==='starting'?'正在连接':'服务已停止'}</span><MoreHorizontal size={17}/></div>
-        <div className="side-device-name"><span className="mini-remote"><Radio size={18}/></span><div><b>G10 Air Mouse</b><small>Bluetooth LE</small></div></div>
+        <div className="side-device-name"><span className="mini-remote"><Radio size={18}/></span><div><b>{state.device.name}</b><small>Bluetooth LE</small></div></div>
       </div>
       <div className="sidebar-footer"><span className="avatar">G</span><div><b>本机设备</b><small>数据保存在本地</small></div><button className="plain-icon" onClick={()=>setPage('settings')} aria-label="打开软件设置"><Settings2 size={16}/></button></div>
     </aside>
@@ -225,15 +241,17 @@ export default function App(){
       </header>
 
       <div className="page-scroll">
+        {(wizardOpen??!state.setup.completed)?<SetupWizard state={state} busy={busy} onStep={step=>void setupAction('step',step)} onEnvironment={()=>void setupAction('environment')} onScan={()=>void deviceAction('scan')} onSelect={id=>void deviceAction('select',id)} onCompatibility={()=>void deviceAction('check')} onDetectAudio={()=>void checkMicrophone()} onVerify={()=>void verifyRoute()} onFinish={()=>void setupAction('finish')} onLater={()=>setWizardOpen(false)}/>:<>
         {page==='home'&&<><DevicePanel state={state.device_setup} busy={busy||state.service.running} onScan={()=>void deviceAction('scan')} onSelect={id=>void deviceAction('select',id)} onCheck={()=>void deviceAction('check')}/><HomePage state={state} busy={busy} onStart={()=>void startBridge()} onStop={()=>void stopBridge()} onPage={setPage} onExit={()=>void exitApplication()}/></>}
         {page==='voice'&&<VoicePage state={state} busy={busy} gain={settings.voice.gain_db} onAuto={()=>void changeAutoWake()} onGain={changeGain} onCheck={()=>void checkMicrophone()} onVerify={()=>void verifyRoute()} latestError={latestVoiceError}/>}
         {page==='keys'&&<KeysPage state={keyState} onToggle={()=>void toggleKeyDetection()}/>}
         {page==='settings'&&<SettingsPage settings={settings} autostart={autostart} connected={connectedToHost} onAutostart={setLogin} onCloseChange={()=>settingSwitch('close_to_tray')} onChangeReconnect={()=>void changeSettings({...settings,behavior:{...settings.behavior,auto_reconnect:!settings.behavior.auto_reconnect}},'重连偏好已保存。')} onExport={()=>void exportSettings()} onImport={importSettings} onReset={()=>void resetSettings()} onReport={()=>void exportDiagnostics()} onExit={()=>void exitApplication()} error={exitError}/>}
         {page==='logs'&&<LogsPage rows={logs} path={state.runtime.service_log_directory} onRefresh={()=>void refresh()} onExport={()=>void exportDiagnostics()}/>}
+        </>}
       </div>
       <footer className="statusbar"><div><span className="status-dot good"/>本地运行 <span className="status-sep">·</span> 蓝牙、语音与按键数据不会上传</div><div>G10 Control <span className="status-sep">·</span> v{state.application.version}</div></footer>
       {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
-      {!connectedToHost&&<div className="host-warning"><CircleHelp size={16}/>桌面服务尚未连接，当前仅显示本机已知设备资料。</div>}
+      {!connectedToHost&&<div className="host-warning"><CircleHelp size={16}/>桌面服务尚未连接，当前为界面预览，不执行检测。</div>}
     </main>
   </div>;
 }
@@ -278,12 +296,7 @@ function VoicePage({state,busy,gain,onAuto,onGain,onCheck,onVerify,latestError}:
   useEffect(()=>setLocalGain(gain),[gain]);
   return <div className="page-stack">
     <div className="page-intro"><div><div className="section-kicker">VOICE PIPELINE</div><p>选择虚拟麦克风并控制红键行为。音频仍由已验证的本地桥接服务传输。</p></div><span className="badge badge-blue"><ShieldCheck size={13}/>本机处理</span></div>
-    <section className="panel settings-panel"><div className="panel-head"><div><h3>本机 VB-CABLE 路由</h3><p>先检测端点，确认后才运行合成验证。豆包等软件应选择录音端 CABLE Output。</p></div><button className="button outline small" onClick={onCheck} disabled={busy||state.service.running}><RefreshCw size={14}/>检测 VB-CABLE</button></div>
-      <div className="field-row"><div className="field-icon"><Headphones size={19}/></div><div className="field-main"><b>本机路由状态</b><small>{state.audio_route.message}</small></div><span className={`badge ${state.microphone.validated?'badge-green':'badge-muted'}`}>{state.microphone.validated?'已验证':'待检测 / 验证'}</span></div>
-      {state.audio_route.pair&&<div className="device-list">{(['render','capture'] as const).map(role=>{const item=state.audio_route.pair![role];return <div key={role} className="device-option"><Volume2 size={15}/><span>{role==='render'?'播放端（写入）':'录音端（读取）'}：{item.name}<small>{item.id}</small></span><small>{item.samplerate} Hz</small></div>;})}</div>}
-      <div className="action-row"><div><b>合成音频路由验证</b><small>仅测试虚拟端点，不保存录音；通过后保存本机证明，有效期 30 天。</small></div><button className="button outline small" disabled={busy||state.service.running||!state.audio_route.confirmation_token} onClick={onVerify}>{busy?'正在处理…':'确认并验证路由'}</button></div>
-      <div className="inline-note"><CircleHelp size={15}/><span>{state.audio_route.proof_path?`证明位置：${state.audio_route.proof_path}。`:'证明保存在本机数据目录。'}缺失、过期或端点变化时会拒绝启动桥接，请重新检测和验证。</span></div>
-    </section>
+    <RoutePanel route={state.audio_route} busy={busy||state.service.running} onDetect={onCheck} onVerify={onVerify}/>
 
     <section className="panel settings-panel"><div className="panel-head"><div><h3>红键自动唤起豆包输入法</h3><p>自动唤起尚未通过本机实测，当前开关仅用于诊断。</p></div><Toggle checked={state.settings.voice.auto_wake_doubao} onChange={onAuto}/></div>
       <div className={`auto-state ${state.settings.voice.auto_wake_doubao?'auto-experimental':''}`}><span className={`state-icon ${state.settings.voice.auto_wake_doubao?'amber':'teal'}`}>{state.settings.voice.auto_wake_doubao?<WandSparkles size={17}/>:<Keyboard size={17}/>}</span><div><b>{state.settings.voice.auto_wake_doubao?'诊断模式已开启，自动唤起尚未成功':'手动唤起已验证'}</b><small>实体右 Alt 可以打开豆包录音，但已测试的程序按键和按钮消息尚未可靠唤起豆包。关闭此项后可继续手动开启豆包语音，使用已经验证的 G10 → CABLE Output 音频桥接。</small></div><span className="badge badge-muted">{state.settings.voice.auto_wake_doubao?'实测未通过':'手动模式'}</span></div>

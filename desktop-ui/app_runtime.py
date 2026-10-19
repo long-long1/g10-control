@@ -22,6 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from portable_paths import RuntimePaths, runtime_paths
 from audio_route import AudioRoute
 from device_setup import DeviceSetup
+from onboarding import SetupWizard
 from local_config import address, cable_capture_id, require_address, require_cable_capture_id
 PATHS = runtime_paths()
 CABLE_ID = cable_capture_id()
@@ -111,6 +112,7 @@ class BridgeSupervisor:
         self.root = self.paths.data_dir
         self.routes = AudioRoute(self.paths)
         self.devices = DeviceSetup()
+        self.wizard = SetupWizard(self.paths, self.devices, self.routes)
         self.logs = self.root / 'logs'
         self.state_dir = self.root / 'runtime'
         self.root.mkdir(parents=True, exist_ok=True)
@@ -251,6 +253,7 @@ class BridgeSupervisor:
                        'address': address(), 'transport': 'Bluetooth LE',
                        'vid': None, 'pid': None, 'battery': None},
             'audio_route': route,
+            'setup': self.wizard.snapshot(),
             'microphone': {'name': capture.get('name', 'CABLE Output (VB-Audio Virtual Cable)'),
                            'id': capture.get('id', ''),
                            'validated': route['validated'], 'is_active': bool(backend.get('audio_active'))},

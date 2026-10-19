@@ -68,6 +68,15 @@ class Application:
             self._require_audio_idle()
             return self._supervisor.devices.scan()
 
+    def detect_environment(self):
+        return self._supervisor.wizard.detect_environment()
+
+    def set_setup_step(self, step):
+        return self._supervisor.wizard.set_step(step)
+
+    def complete_setup(self):
+        return self._supervisor.wizard.complete()
+
     def select_ble_device(self, identity):
         with self._supervisor.lock:
             self._require_audio_idle()
