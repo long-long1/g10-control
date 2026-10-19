@@ -343,3 +343,15 @@ G10-AudioBridge.exe  093124223A595629184B3ED4E8506390B79E0500A4298CAD46DC944A946
 ```
 
 本轮结束后停止，等待用户确认。真实端点验证、干净电脑验收及未在本轮范围内的开发事项继续保持待办。
+
+## 13. v0.1.0 Beta 候选功能轮（2026-10-20）
+
+基线 `6e152ec5fc7d87ea9567e98226a1aa1415b098ef`。按五个阶段推进、逐阶段测试及提交。真实 BLE 扫描、连接、GATT 业务及麦克风会话均未授权，本轮不执行；无管理员操作、驱动安装、默认设备/音量修改、键鼠模拟或对外二进制发布。
+
+### 阶段一：真实 VB-CABLE 验证
+
+- 用户授权后执行只读音频会话元数据检查，两次检查在两个虚拟端点均只见 inactive 会话，没有 active 会话。打开流前再次确认空闲。没有读取样本来判断隐私或静音。
+- **只执行一次真实合成路由测试，成功**。复用原 1.48 秒信号及原相关性算法，两声道相关性均为 `0.9999999968589501`，默认端点未变化；未保存录音、未打开物理麦克风。结果在 `output/beta-audio-real.json`，前置检查在 `output/beta-audio-preflight.json`（含本机身份，不提交）。
+- 真证明保存于当时 `dist/G10-Control/data/audio/route-proof.json`，保存后重新枚举及校验成功。为避免后续 clean 构建清除本机结果，另保留到忽略的 `output/beta-local-proof/route-proof.json`；**不带入干净 Beta 构建目录**。
+- 新增 `audio_idle.py` 元数据空闲检查，未知状态/读取失败均拒绝；生产 probe 包装在流操作前也执行同一检查，活动或无法确认时要求用户关闭相关程序。没有改原 WASAPI/波形/相关性核心。新增 `build/verify_local_route.py` 默认只读预检查，必须显式给 `--execute-when-idle` 才单次验证，无自动重试。
+- 相关离线测试：`python -m unittest -v test_audio_idle test_audio_route` **26/26 通过**，日志 `output/beta-stage1-tests.log`。该组模拟结果与上述一次真实测试明确分开。

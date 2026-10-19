@@ -48,6 +48,10 @@ def _catalog():
 
 
 def _probe(info, directory):
+    from audio_idle import inspect_idle
+    _, _, pair = select_pair(info)
+    if not inspect_idle(pair)['idle']:
+        raise RouteError('audio_busy', '无法确认 VB-CABLE 没有其他活动音频流，请关闭相关程序并确认后重新检测。')
     with _com_thread():
         return probe(info, directory, 'vbcable')
 

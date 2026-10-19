@@ -301,6 +301,7 @@ class AudioRouteTests(unittest.TestCase):
 
         self.route._probe = audio_route._probe
         with patch.object(original.sd, 'InputStream', Input), patch.object(original.sd, 'OutputStream', Output), \
+                patch('audio_idle.inspect_idle', return_value={'idle': True}), \
                 patch.object(original.sd, 'WasapiSettings'), patch.object(original.sd, 'check_input_settings'), \
                 patch.object(original.sd, 'check_output_settings'), patch.object(original.time, 'sleep'), \
                 patch.object(original, 'defaults', side_effect=lambda: copy.deepcopy(self.info['defaults'])):
