@@ -2,9 +2,16 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from analyze_audio import Decoder,analyze
+from unittest.mock import patch
+from analyze_audio import Decoder,analyze,tables
 
 class AudioTests(unittest.TestCase):
+    def test_decoder_does_not_read_external_reference_files(self):
+        with patch.object(Path,'read_text',side_effect=AssertionError('External file read')):
+            steps,indices=tables()
+            self.assertEqual((len(steps),len(indices)),(89,8))
+            self.assertEqual(Decoder(False).decode(bytes.fromhex('7f')),[-11,19])
+
     def test_nibble_order_distinguishes_source_and_candidate(self):
         self.assertEqual(Decoder().decode(bytes.fromhex('7f')),[11,-19])
         self.assertEqual(Decoder(False).decode(bytes.fromhex('7f')),[-11,19])
