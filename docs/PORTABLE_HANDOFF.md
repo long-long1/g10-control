@@ -1,6 +1,6 @@
 # G10 Control Portable 版本开发交接
 
-> 最新阶段：第三轮 Portable 运行时路径接入与冻结启动诊断（2026-10-20），见第 11 节。第 1–9 节保留第一阶段审查记录，第 10 节保留第二轮准备基线；其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。不得将无硬件诊断通过理解为设备业务或干净电脑验收通过。
+> 最新阶段：第四轮本机 VB-CABLE 路由证明与 Portable 持久化（2026-10-20），见第 12 节。第 1–11 节保留历史审查和各轮基线，其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。不得将离线测试或无硬件诊断通过理解为真实音频路由或干净电脑验收通过。
 
 ## 1. 仓库状态
 
@@ -277,3 +277,69 @@ G10-AudioBridge.exe  8CD494E3F24B8FA984AEFF19DF9D3B9DE09CC91EFAC24111CE548CF8625
 3. **首次运行向导**：解释无设备/未知能力、缺失或歧义的 VB-CABLE、未验证路由、WebView2 缺失与手动处理；显示实际数据目录及只读回退原因。完善配置导入和启动项移动提示。本轮没有实现完整向导或设备 UX。
 4. **干净电脑验证**：隔离 PATH 不是卸载 Python/Node，也不是干净 Windows 验收。需在无开发环境的 Windows 11 x64 上验证 WebView2/.NET 有无、真正只读目录 ACL、标准用户、首次启动与正常托盘/单实例/退出；获得明确设备授权后另验桥接真实正常启动、重复实例阻止、安全停止/超时、VB-CABLE 与 G10 音频。按键观察 helper 仍未打包。
 5. **发行前约束**：总体许可证、第三方 notice/SBOM、许可材料及隐私 allowlist 审查仍未完成。本轮只提交源码/测试/交接文档；未创建 ZIP、未上传二进制、未推送 Release。后续公开分发需单独确认。
+
+## 12. 第四轮：本机 VB-CABLE 路由证明与 Portable 持久化（2026-10-20）
+
+基于 `3b918b967d9d9731801ebf5e89552f01464be05e`。本轮仅实现本机 VB-CABLE 检测、用户确认后的合成路由验证、证明持久化和桥接启动门槛。**真实路由验证待授权、待实测**；本轮没有枚举真实音频端点、打开真实音频流、连接 BLE、执行键鼠模拟、安装驱动或更改 Windows 默认音频设备。没有开发 BLE 发现、完整首次运行向导或 ZIP 发行。
+
+### 原流程审查及保留边界
+
+原 `g10_audio_bridge.select_verified_pair()` 从 `ROOT/output/phase3-vbcable-probe` 读取两个旧 JSON，检查 `passed`、同名活动端点 ID 是否一致及 48 kHz。开发电脑的这些输出不属于发行资源，其他用户不能依赖。本轮只替换该函数的证明入口；`g10_audio_bridge.py` 的其他函数与控制流不变。
+
+原 `virtual_audio_probe.select_devices(..., 'vbcable')` 要求唯一标准 `VB-Audio Virtual Cable`、CABLE Output 为输入/录音方向、CABLE Input 为输出/播放方向、双声道，以及唯一活动 Core Audio 同名身份，拒绝静音/零音量，无物理端点 fallback。原 `probe()` 使用共享 WASAPI float32 双声道，先检查输入/输出设置，以原 `test_signal()` 的四段低幅度多音合成信号（总计 1.48 秒）写入 CABLE Input，并在 CABLE Output 的内存缓冲接收，原 `correlate()` 以任一声道绝对相关性大于 0.8 判定。缓冲上限 6 秒，原 finally 比较默认端点，默认不保存捕获内容。
+
+**`virtual_audio_probe.py` 完全未修改**，没有改波形、相关性算法、WASAPI stream 参数/处理或 BLE/ATVV、ADPCM、缓冲算法。新 `audio_route.py` 包装并调用该真实流程，不会把检测成功或 `passed=true` 单字段当作完整证明。
+
+### 使用方式与证明策略
+
+1. 用户进入“语音设置”，点击“检测 VB-CABLE”。只有此显式操作或用户启动桥接前的复核才枚举音频元数据；启动程序和定时状态刷新不自动扫描端点。检测没有打开录放音流，也不创建成功证明。
+2. UI 分别展示播放端（写入）CABLE Input、录音端（读取）CABLE Output 的名称、ID 和 48000 Hz。驱动/方向缺失、重复 WASAPI/Core Audio 端点、非活动状态、静音/零音量、元数据不可读或采样率不符都会拒绝。共享格式也必须支持双声道；不自动调整格式或音量。
+3. 检测成功生成绑定当前两个端点及格式的 5 分钟一次性确认 token。“确认并验证路由”显示具体操作说明，再向后端传入 token 和显式布尔确认；未确认、错误/已使用/过期 token 均不能触发 probe。确认后重新枚举，端点变动时在打开流之前拒绝。验证期间禁止同一 UI 启动桥接，存在自有或可识别的外部桥接进程时拒绝检测/验证。
+4. 复用原 `probe(info, ..., 'vbcable')`，没有可导入“成功结果”的 UI API。原 probe 的默认设备检查保留，新策略另要求六个默认端点角色均可读取，前后默认身份相同，验证结束后两个虚拟端点及格式仍一致。保留原大于 0.8 阈值和允许反相信号；增加非有限值、采集不完整、输入流状态异常及输出 underflow 的拒绝检查。相关性上界仅容许 1e-6 的浮点舍入误差。
+5. 证明原子保存到 **`<实际数据根>/audio/route-proof.json`**：schema 1、验证版本 `vbcable-synthetic-1`、带时区的验证时间、两端的 ID/名称/方向/采样率/共享格式、默认端点未变化标记及原 probe 的纯数值结果。临时文件 flush/fsync 后 replace，不保存 WAV、PCM 或真实音频。旧开发目录证明不自动导入或充当 fallback。
+6. 证明有效期固定为 **30 天**，时钟显著超前、格式损坏、版本不匹配、失败/缺失数据都拒绝。程序重启后先做文件/版本/时间校验，显示“已有证明，需重新检测当前端点”，此时不标为当前已验证；检测或启动桥接再用实时端点身份校验。设备索引不持久化，允许枚举顺序变化，但端点 ID/名称/格式变化必须重新验证。
+7. 主监督器在 Popen 前调用 `require_verified()`；桥接脚本和冻结桥接 EXE 的 `select_verified_pair()` 再独立枚举并验证同一数据目录的证明，然后才可能进入原业务流。缺失/过期/损坏证明在音频枚举之前就拒绝；父进程已通过但之后文件/端点变化，子进程仍会拒绝。不会为了使第一次运行通过而放宽 gate。
+8. 用户确认开始重验时先撤销旧成功证明。探测失败、默认端点变化、热插拔、校验失败或保存失败，不留下可用的旧成功记录；拒绝确认或用户取消确认框不会启动音频或主动删除原证明。
+
+源码模式及冻结模式都使用现有 `runtime_paths()` 数据根；可写 Portable 为 EXE 同级 `data/`，不可写时为 LocalAppData/G10Control，源码默认也是 LocalAppData。移动整个可写 Portable 目录会携带证明；搬到其他电脑仍必须匹配当地端点身份。切换数据根不会静默搬运或迁移证明，需要在新数据根重新验证。
+
+默认手动工作流的桥接录音端身份现在来自真实路由证明，不再要求预先用开发脚本写 `cable_capture_id`。原设置 JSON 的 `virtual_microphone_id` 保留为兼容字段，不负责选择实际路由。实验性自动唤起仍默认关闭，其独立旧配置检查保留：启用时录音 ID 必须与证明匹配，不匹配会明确拒绝；本轮未扩展自动唤起。G10 蓝牙地址配置仍是另一项启动前提，本轮不做设备发现。
+
+状态页和语音设置不再凭“CABLE Output”名称显示已验证；只有当前端点与有效证明匹配才显示路由验证通过。UI 显示证明实际路径及失败原因，可重新检测/验证。这是单项路由设置页，不是完整首启向导。
+
+### 真实验证授权边界
+
+本轮未获得打开真实 VB-CABLE 端点的授权，**因此真实 Windows 音频路由结果仍为待验证**。没有将模拟结果写入正常 Portable 数据目录或当作本机实测证明。
+
+后续用户授权时，具体操作仅为：确认唯一的 CABLE Input 播放端和 CABLE Output 录音端；以 48000 Hz 双声道共享模式向前者发送约 1.48 秒的原低幅度合成信号，短时从后者读入内存（上限 6 秒），计算相关性并核对默认端点未变；成功才在数据根保存 JSON 证明。不打开物理麦克风，不保存捕获音频，不改变默认端点或音量，不连接 G10。用户应先停止其他程序向 VB-CABLE 发送真实麦克风或私人音频，避免虚拟通道混入无关内容。
+
+剩余边界：实际 Windows COM/驱动元数据及真实 WASAPI probe 尚待这次授权实测；端点在最后一次枚举与打开流之间热插拔存在原 PortAudio 索引流程的竞态，验证后复核会拒绝保存变化后的证明，但本轮未改 WASAPI 核心来实现端点 ID 原子绑定。证明是本地状态 JSON，不是防用户主动篡改的签名。重启/启动会重新检查，运行期间不新增持续热插拔监控。无开发环境的干净 Windows 11 测试、BLE 发现、完整首启向导、按键 helper 和发行许可/ZIP 工作仍未完成。
+
+### 本轮实际测试与冻结运行结果
+
+| 命令 / 检查 | 真实结果 |
+|---|---|
+| 根目录 `.venv/Scripts/python.exe -m unittest discover -p "test_*.py" -v` | **66 run, 66 passed**，0 failure/error/skip。日志 `output/route-root-tests.log`。较上一轮新增 20 项路由测试，没有删除或跳过旧测试。 |
+| desktop-ui 内 `../.venv/Scripts/python.exe -m unittest discover -p "test_*.py" -v` | **24 run, 24 passed**。日志 `output/route-desktop-tests.log`。新增 6 项 API/监督器路由门槛测试；旧假进程启动测试显式注入已通过的路由策略，并另有未注入策略时缺失/变化证明拒绝 Popen 的测试。 |
+| desktop-ui/web 内 `npm run build` | **退出码 0**，TypeScript + Vite 1578 modules 成功。当前产物 `index-BbJmrNBq.js` 与 `index-C3blFDMn.css`。没有改依赖版本。 |
+| `.venv/Scripts/python.exe -m PyInstaller --clean --noconfirm build/portable_onedir.spec` | **退出码 0，Build complete**，PyInstaller 6.22.3 / hooks 2026.8。日志 `output/route-build.log`。音频策略通过静态 import 纳入两个 EXE，不需要额外 helper。 |
+| `.venv/Scripts/python.exe build/diagnose_portable.py`（最终） | **6 次 EXE 启动均退出 0、ok=true**；初始目录、移动到中文/空格目录、同名 data 文件阻止创建后的 LocalAppData 回退各覆盖两个 EXE。日志 `output/route-startup-final.log`，报告 `output/portable startup xx0mdtm4/`。 |
+
+离线测试涵盖双方向/唯一身份、驱动缺失与物理端点拒绝、重复/失活/静音/零音量/不可读、PortAudio 与共享采样率、一次性确认与过期、保存成功/失败/原子性、30 天有效期、时钟异常与错误版本、损坏/伪单字段成功证明、端点与格式变化、索引重排、默认端点不可读/变化、验证中热插拔、失败重验撤销旧证明、Portable 移动及源代码/冻结/回退数据路径。除假 probe 结果测试外，另用假 InputStream/OutputStream **真正执行未改的原 probe + test_signal + correlate**，实际生成相关性指标并经新策略保存到临时目录；没有真实音频设备访问。
+
+桌面测试另验证：缺失证明在枚举及 Popen 前拦截；端点 ID 改变时拒绝启动；默认手动桥接无需开发机 capture ID 配置；实验性自动唤起仍拒绝不匹配的显式 ID；UI 后端要求确认；桥接使用中拒绝检测/验证。协议/音频保护检查通过：`virtual_audio_probe.py`、ATVV、解码、handshake、readonly、audio_defaults 等文件无差异；桥接脚本剔除 `select_verified_pair` 后的 AST 与基线完全一致。
+
+首次安全诊断的两个初始 EXE 检查已成功，但接着移动目录时出现 Windows `WinError 5`，故首次整轮**退出 1**（日志 `output/route-startup.log`、目录 `output/portable startup oe8llq4n/`），没有报告整轮成功。诊断脚本现对已退出 EXE 后的目录移动进行最长 10 秒的 PermissionError 重试，保留原有绝对目标范围校验，超时仍抛错，不强杀进程。最终完整诊断的程序目录及数据目录移动分别重试 3 次和 7 次后成功；次数写入 `summary.json`。这是 Windows 文件占用释放的观察结果，没有把首次失败删除或掩盖。
+
+最终 6 份报告均含 `route_proof_gate="missing proof blocked before audio access"`：诊断在数据根的独立临时目录中构造缺失证明，并注入一旦被调用就报错的 catalog，从而验证不会枚举真实端点。3 次主 EXE 隐藏 WebView2 渲染都成功，Runtime `155.0.4283.62`；加载实际前端后只用 DOM 切换到语音设置预览，检查 `audio_route_ui.visible=true`、`verify_disabled=true`。窗口没有 JS 业务 API，未点击检测或验证按钮，没有调用真实 route probe。报告均 `business_started=false`，主 EXE 另为 `service_running=false`；进程已自行退出。没有将这些结果称为真实 VB-CABLE 路由通过。
+
+构建警告仍为两份各 311 条模块诊断，集合类别与第 11 节相同；日志仍报告 pycparser lextab/yacctab，未通过删警告或放宽检查消除它们。两个 EXE 的 CFFI/WinRT 内存检查与 WebView2 实际渲染继续通过；新的实际 COM 元数据和 WASAPI 驱动路径仍按上述授权边界待验。
+
+本轮 EXE SHA-256（用于定位本机构建，非发行签名）：
+
+```text
+G10-Control.exe      A3A5F96CC58F8A0472C4712C8103DA8A0E5A70AC6B44AD489CBFBFFBF46661F7
+G10-AudioBridge.exe  093124223A595629184B3ED4E8506390B79E0500A4298CAD46DC944A94607731
+```
+
+本轮结束后停止，等待用户确认。真实端点验证、干净电脑验收及未在本轮范围内的开发事项继续保持待办。

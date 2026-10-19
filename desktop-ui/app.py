@@ -90,16 +90,25 @@ class Application:
         return self.save_settings(value)
 
     def get_audio_devices(self):
-        import sounddevice as sd
-        devices = []
-        for index, item in enumerate(sd.query_devices()):
-            if item.get('max_input_channels', 0) <= 0:
-                continue
-            name = str(item.get('name', ''))
-            if any(token in name.casefold() for token in ('cable', 'virtual', 'voicemeeter')):
-                devices.append({'name': name, 'channels': int(item['max_input_channels']),
-                                'id': name, 'validated': 'cable output' in name.casefold()})
-        return devices
+        route = self.detect_audio_route()
+        capture = (route.get('pair') or {}).get('capture')
+        return ([{'name': capture['name'], 'channels': capture['mix_format']['nChannels'],
+                  'id': capture['id'], 'validated': route['validated']}] if capture else [])
+
+    def _require_audio_idle(self):
+        if ((self._supervisor.proc and self._supervisor.proc.poll() is None)
+                or self._supervisor._external_bridge_processes()):
+            raise RuntimeError('请先安全停止所有 G10 音频桥接，再检测或验证 VB-CABLE。')
+
+    def detect_audio_route(self):
+        with self._supervisor.lock:
+            self._require_audio_idle()
+            return self._supervisor.routes.detect()
+
+    def verify_audio_route(self, token, confirmed=False):
+        with self._supervisor.lock:
+            self._require_audio_idle()
+            return self._supervisor.routes.verify(token, confirmed)
 
     def get_logs(self):
         return self._supervisor.logs_tail(120)

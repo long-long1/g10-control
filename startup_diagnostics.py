@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import importlib
 import json
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import time
 import traceback
 from html.parser import HTMLParser
@@ -80,6 +82,23 @@ def _webview_probe(index: Path) -> dict:
                 time.sleep(.1)
             else:
                 result['error'] = 'React did not mount with its stylesheet'
+            if 'dom' in result:
+                # Navigate only to the route settings preview. There is no
+                # js_api, and no endpoint detection/verification button is used.
+                window.evaluate_js("Array.from(document.querySelectorAll('.side-nav button')).find(x => x.textContent === '语音设置')?.click()")
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    route_ui = window.evaluate_js('''({
+                        visible: document.body.innerText.includes('本机 VB-CABLE 路由'),
+                        verify_disabled: Array.from(document.querySelectorAll('button'))
+                            .some(x => x.textContent === '确认并验证路由' && x.disabled)
+                    })''')
+                    if route_ui and route_ui['visible'] and route_ui['verify_disabled']:
+                        result['audio_route_ui'] = route_ui
+                        break
+                    time.sleep(.1)
+                else:
+                    result['error'] = 'Route settings preview did not show a disabled verification action'
         except Exception:
             result['error'] = traceback.format_exc()
         finally:
@@ -147,6 +166,21 @@ def diagnose(component: str) -> int:
                 reader.close()
             writer.close()
         report['memory_checks'] = ['numpy', 'cffi/pycparser', 'WinRT DataWriter/DataReader']
+        # Isolated missing-proof gate check: never enumerate real endpoints,
+        # even when the user's normal data directory already has a proof.
+        from audio_route import AudioRoute, RouteError
+        def forbidden_catalog():
+            raise AssertionError('Startup diagnosis must not enumerate audio endpoints')
+        with tempfile.TemporaryDirectory(prefix='.route-diagnostic-', dir=paths.data_dir) as folder:
+            routes = AudioRoute(replace(paths, data_dir=Path(folder)), catalog_fn=forbidden_catalog)
+            try:
+                routes.require_verified()
+            except RouteError as exc:
+                if exc.code != 'missing':
+                    raise
+                report['route_proof_gate'] = 'missing proof blocked before audio access'
+            else:
+                raise RuntimeError('Missing route proof did not block bridge startup')
         # Exercise the bridge's command parser, then exit before approvals,
         # configuration, route proof or any device operation is consulted.
         from g10_audio_bridge import main as bridge_main

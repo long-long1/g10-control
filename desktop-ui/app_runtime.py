@@ -20,6 +20,7 @@ RAW_INPUT = PROJECT_ROOT / 'raw_input.py'
 PYTHONW = PROJECT_ROOT / '.venv' / 'Scripts' / 'pythonw.exe'
 sys.path.insert(0, str(PROJECT_ROOT))
 from portable_paths import RuntimePaths, runtime_paths
+from audio_route import AudioRoute
 from local_config import address, cable_capture_id, require_address, require_cable_capture_id
 PATHS = runtime_paths()
 CABLE_ID = cable_capture_id()
@@ -107,6 +108,7 @@ class BridgeSupervisor:
         self.settings = settings
         self.paths = paths or PATHS
         self.root = self.paths.data_dir
+        self.routes = AudioRoute(self.paths)
         self.logs = self.root / 'logs'
         self.state_dir = self.root / 'runtime'
         self.root.mkdir(parents=True, exist_ok=True)
@@ -144,7 +146,6 @@ class BridgeSupervisor:
 
     def start(self) -> dict:
         require_address()
-        require_cable_capture_id()
         with self.lock:
             if self.proc and self.proc.poll() is None:
                 return {'started': True, 'already_running': True}
@@ -155,6 +156,13 @@ class BridgeSupervisor:
             launcher = bridge_command(self.paths)
             if not Path(launcher[0]).is_file():
                 raise RuntimeError(f'找不到桥接运行程序：{launcher[0]}')
+            _, _, pair = self.routes.require_verified()
+            current = self.settings.load()
+            if current['voice']['auto_wake_doubao']:
+                # Experimental auto-wake still uses its legacy explicit ID.
+                # Manual audio bridging now takes its identity from real proof.
+                if require_cable_capture_id().casefold() != pair['capture']['id'].casefold():
+                    raise RuntimeError('自动唤起配置的录音端点与本机验证不符，请关闭自动唤起或重新配置。')
             self.run_dir = self.logs / datetime.now().strftime('bridge-%Y%m%d-%H%M%S-%f')
             self.run_dir.mkdir(parents=True, exist_ok=False)
             self.status_path.unlink(missing_ok=True)
@@ -165,7 +173,6 @@ class BridgeSupervisor:
                     '--headless', '--monitor-output', '--observe-ime', '--max-seconds', '0',
                     '--status-path', str(self.status_path), '--stop-file', str(self.stop_path),
                     '--output', str(self.run_dir / 'events')]
-            current = self.settings.load()
             args.extend(['--gain-db', str(current['voice']['gain_db'])])
             if current['voice']['auto_wake_doubao']:
                 args.append('--doubao-ime')
@@ -221,6 +228,8 @@ class BridgeSupervisor:
         else:
             connection = 'starting'
             detail = backend.get('last_error') or '正在发现 ATVV 服务…'
+        route = self.routes.snapshot()
+        capture = (route.get('pair') or {}).get('capture', {})
         return {
             'application': {'name': APP_NAME, 'version': '0.1.0', 'single_instance': True},
             'paths': {'data_directory': str(self.root), 'portable': self.paths.portable,
@@ -236,8 +245,10 @@ class BridgeSupervisor:
                         'error': backend.get('last_error')},
             'device': {'name': G10_NAME, 'address': G10_ADDRESS, 'transport': 'Bluetooth LE',
                        'vid': '0x620A', 'pid': '0x0407', 'battery': None},
-            'microphone': {'name': 'CABLE Output (VB-Audio Virtual Cable)', 'id': CABLE_ID,
-                           'validated': True, 'is_active': bool(backend.get('audio_active'))},
+            'audio_route': route,
+            'microphone': {'name': capture.get('name', 'CABLE Output (VB-Audio Virtual Cable)'),
+                           'id': capture.get('id', ''),
+                           'validated': route['validated'], 'is_active': bool(backend.get('audio_active'))},
         }
 
     def logs_tail(self, limit: int = 80) -> list[dict]:

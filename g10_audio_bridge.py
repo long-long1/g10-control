@@ -129,17 +129,8 @@ class BridgeController(Controller):
             self.rec.emit('unexpected_audio',note='Audio outside accepted session')
 
 def select_verified_pair():
-    info=catalog();capture,render=select_devices(info,'vbcable')
-    proof=ROOT/'output/phase3-vbcable-probe'
-    prior=json.loads((proof/'endpoints.json').read_text(encoding='utf-8'))
-    result=json.loads((proof/'route-test.json').read_text(encoding='utf-8'))
-    if not result.get('passed'):raise RuntimeError('VB-CABLE route proof is missing or failed')
-    for d in (capture,render):
-        now=[r['id'] for r in info['core_audio_endpoints'] if r['name']==d['name'] and r['state']==1]
-        old=[r['id'] for r in prior['core_audio_endpoints'] if r['name']==d['name'] and r['state']==1]
-        if now!=old:raise RuntimeError('VB-CABLE endpoint identity changed; rerun synthetic route probe first')
-    if capture['default_samplerate']!=48000 or render['default_samplerate']!=48000:
-        raise RuntimeError('This bridge requires verified 48kHz shared-mode endpoints')
+    from audio_route import AudioRoute
+    capture,render,_=AudioRoute().require_verified()
     return capture,render
 
 def main():

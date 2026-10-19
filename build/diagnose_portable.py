@@ -10,6 +10,26 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
+
+
+def move_when_released(source, target, session):
+    """Windows can retain file handles briefly after the diagnostic EXE exits."""
+    source.resolve().relative_to(session.resolve())
+    target.resolve().relative_to(session.resolve())
+    deadline = time.monotonic() + 10
+    retries = 0
+    while True:
+        try:
+            source.rename(target)
+            return retries
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            if retries == 0:
+                print('Waiting up to 10 seconds for Windows to release diagnostic directory handles.', flush=True)
+            retries += 1
+            time.sleep(.2)
 
 
 def main():
@@ -58,7 +78,7 @@ def main():
         # Verify both absolute paths before moving the diagnostic directory.
         program.resolve().relative_to(session)
         moved.resolve().relative_to(session)
-        program.rename(moved)
+        summary[-1]['relocation_retries'] = move_when_released(program, moved, session)
         program = moved
         report = run('control-moved-webview', 'Control', True)
         if Path(report['paths']['data_dir']) != program / 'data':
@@ -73,7 +93,7 @@ def main():
         data.resolve().relative_to(session)
         saved = program / 'saved portable data'
         saved.resolve().relative_to(session)
-        data.rename(saved)
+        summary[-1]['data_move_retries'] = move_when_released(data, saved, session)
         data.write_text('intentionally blocks mkdir', encoding='utf-8')
         for component in ('Control', 'AudioBridge'):
             report = run(f'{component.lower()}-fallback', component, webview=component == 'Control')

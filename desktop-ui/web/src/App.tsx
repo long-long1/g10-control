@@ -20,7 +20,8 @@ const emptySnapshot: Snapshot = {
   application:{name:'G10 Control',version:'0.1.0',single_instance:true},
   service:{running:false,connection:'stopped',detail:'等待启动',started_at:null,audio_active:false,processed_audio_seconds:0,input_level_dbfs:-120,cable_level_dbfs:-120,cable_peak:0,error_count:0,error:null},
   device:{name:'G10',address:'',transport:'Bluetooth LE',vid:'0x620A',pid:'0x0407',battery:null},
-  microphone:{name:'CABLE Output (VB-Audio Virtual Cable)',id:DEFAULT_CABLE,validated:true,is_active:false},
+  microphone:{name:'CABLE Output (VB-Audio Virtual Cable)',id:DEFAULT_CABLE,validated:false,is_active:false},
+  audio_route:{state:'missing',message:'请检测本机 VB-CABLE 并确认合成验证。',validated:false,pair:null,verified_at:null,proof_path:'',confirmation_token:null},
   settings:starterSettings,runtime:{log_directory:'',service_log_directory:null},
 };
 
@@ -45,7 +46,6 @@ export default function App(){
   const [state,setState]=useState<Snapshot>(emptySnapshot);
   const [logs,setLogs]=useState<EventRow[]>([]);
   const [keyState,setKeyState]=useState<KeySnapshot>({running:false,device_filter:'',events:[]});
-  const [microphones,setMicrophones]=useState<{name:string;id:string;channels:number;validated:boolean}[]>([]);
   const [autostart,setAutostart]=useState(false);
   const [connectedToHost,setConnectedToHost]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -125,9 +125,20 @@ export default function App(){
     await changeSettings({...settings,voice:{...settings.voice,gain_db}},'增益已保存；下次启动服务时生效。');
   }
   async function checkMicrophone(){
-    if(!api)return setToast('本地输入端点：CABLE Output（已验证）');
-    try{const found=await api.get_audio_devices();setMicrophones(found);setToast(found.some(item=>item.validated)?'CABLE Output 可用，路由已验证。':'暂未检测到 CABLE Output，请检查虚拟麦克风安装状态。');}
+    if(!api)return setToast('本机端点检测需运行桌面版。');
+    setBusy(true);
+    try{const route=await api.detect_audio_route();setToast(route.message);await refresh();}
     catch(error){setToast(error instanceof Error?error.message:'音频设备枚举失败');}
+    finally{setBusy(false);}
+  }
+  async function verifyRoute(){
+    const route=state.audio_route;
+    if(!api||!route.confirmation_token||!route.pair)return setToast('请先检测本机 VB-CABLE。');
+    if(!window.confirm(`将仅打开检测到的播放端 ${route.pair.render.name} 和录音端 ${route.pair.capture.name}，使用 48000 Hz 双声道共享模式。\n\n发送约 1.48 秒低幅度合成信号，短时读取虚拟录音端（最多 6 秒），不读取物理麦克风、不保存录音、不更改默认设备。\n\n请先停止其他程序向 VB-CABLE 发送真实麦克风或私人音频。确认开始？`))return;
+    setBusy(true);
+    try{const result=await api.verify_audio_route(route.confirmation_token,true);setToast(result.message);}
+    catch(error){setToast(error instanceof Error?error.message:'合成路由验证失败');}
+    finally{await refresh();setBusy(false);}
   }
   async function toggleKeyDetection(){
     if(!api)return setToast('只读按键检测需运行桌面版。');
@@ -203,7 +214,7 @@ export default function App(){
 
       <div className="page-scroll">
         {page==='home'&&<HomePage state={state} busy={busy} onStart={()=>void startBridge()} onStop={()=>void stopBridge()} onPage={setPage} onExit={()=>void exitApplication()}/>}
-        {page==='voice'&&<VoicePage state={state} gain={settings.voice.gain_db} onAuto={()=>void changeAutoWake()} onGain={changeGain} onCheck={()=>void checkMicrophone()} devices={microphones} latestError={latestVoiceError}/>}
+        {page==='voice'&&<VoicePage state={state} busy={busy} gain={settings.voice.gain_db} onAuto={()=>void changeAutoWake()} onGain={changeGain} onCheck={()=>void checkMicrophone()} onVerify={()=>void verifyRoute()} latestError={latestVoiceError}/>}
         {page==='keys'&&<KeysPage state={keyState} onToggle={()=>void toggleKeyDetection()}/>}
         {page==='settings'&&<SettingsPage settings={settings} autostart={autostart} connected={connectedToHost} onAutostart={setLogin} onCloseChange={()=>settingSwitch('close_to_tray')} onChangeReconnect={()=>void changeSettings({...settings,behavior:{...settings.behavior,auto_reconnect:!settings.behavior.auto_reconnect}},'重连偏好已保存。')} onExport={()=>void exportSettings()} onImport={importSettings} onReset={()=>void resetSettings()} onReport={()=>void exportDiagnostics()} onExit={()=>void exitApplication()} error={exitError}/>}
         {page==='logs'&&<LogsPage rows={logs} path={state.runtime.service_log_directory} onRefresh={()=>void refresh()} onExport={()=>void exportDiagnostics()}/>}
@@ -239,7 +250,7 @@ function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy
       <div className="panel-head"><div><span className="section-kicker">VOICE INPUT</span><h3>麦克风语音</h3></div><button className="circle-nav" onClick={()=>onPage('voice')} aria-label="语音设置"><ChevronRight size={17}/></button></div>
       <div className="voice-route"><div className="route-icon"><Mic2 size={21}/></div><div className="route-copy"><b>{state.service.audio_active?'正在接收遥控器声音':'G10 麦克风通道'}</b><small>{state.microphone.name}</small></div><span className={`badge ${state.service.audio_active?'badge-green':'badge-muted'}`}>{state.service.audio_active?'输入中':'已配置'}</span></div>
       <Meter value={state.service.cable_level_dbfs} label="虚拟麦克风电平"/>
-      <div className="voice-stats"><span><AudioLines size={14}/>{state.service.processed_audio_seconds.toFixed(1)} 秒已解码</span><span><ShieldCheck size={14}/>本地路由已验证</span></div>
+      <div className="voice-stats"><span><AudioLines size={14}/>{state.service.processed_audio_seconds.toFixed(1)} 秒已解码</span><span><ShieldCheck size={14}/>{state.microphone.validated?'本机路由已验证':'本机路由待验证'}</span></div>
     </section>
 
     <section className="quick-card panel"><div className="panel-head"><div><span className="section-kicker">QUICK ACCESS</span><h3>快捷入口</h3></div></div><div className="quick-links"><QuickLink icon={<AudioWaveform size={18}/>} title="语音设置" detail="麦克风与唤起方式" onClick={()=>onPage('voice')}/><QuickLink icon={<Keyboard size={18}/>} title="按键检测" detail="仅监听 G10 原始报告" onClick={()=>onPage('keys')}/><QuickLink icon={<ClipboardList size={18}/>} title="诊断日志" detail="连接与音频状态" onClick={()=>onPage('logs')}/></div></section>
@@ -250,15 +261,16 @@ function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy
 function Fact({label,value}:{label:string;value:string}){return <div className="device-fact"><span>{label}</span><b>{value}</b></div>}
 function QuickLink({icon,title,detail,onClick}:{icon:React.ReactNode;title:string;detail:string;onClick:()=>void}){return <button className="quick-link" onClick={onClick}><span className="quick-icon">{icon}</span><span><b>{title}</b><small>{detail}</small></span><ChevronRight size={16}/></button>}
 
-function VoicePage({state,gain,onAuto,onGain,onCheck,devices,latestError}:{state:Snapshot;gain:number;onAuto:()=>void;onGain:(gain:number)=>void;onCheck:()=>void;devices:{name:string;id:string;channels:number;validated:boolean}[];latestError:EventRow|undefined}){
+function VoicePage({state,busy,gain,onAuto,onGain,onCheck,onVerify,latestError}:{state:Snapshot;busy:boolean;gain:number;onAuto:()=>void;onGain:(gain:number)=>void;onCheck:()=>void;onVerify:()=>void;latestError:EventRow|undefined}){
   const [localGain,setLocalGain]=useState(gain);
   useEffect(()=>setLocalGain(gain),[gain]);
   return <div className="page-stack">
     <div className="page-intro"><div><div className="section-kicker">VOICE PIPELINE</div><p>选择虚拟麦克风并控制红键行为。音频仍由已验证的本地桥接服务传输。</p></div><span className="badge badge-blue"><ShieldCheck size={13}/>本机处理</span></div>
-    <section className="panel settings-panel"><div className="panel-head"><div><h3>虚拟麦克风</h3><p>豆包等语音输入软件应选择相同的 CABLE Output。</p></div><button className="button outline small" onClick={onCheck}><RefreshCw size={14}/>检查设备</button></div>
-      <div className="field-row"><div className="field-icon"><Headphones size={19}/></div><div className="field-main"><b>桥接输出设备</b><small>已通过 WASAPI 合成信号与实际语音验证</small></div><div className="field-select locked"><span>{state.microphone.name}</span><span className="validated"><Check size={13}/>已验证</span></div></div>
-      <div className="device-list">{devices.map(item=><div key={item.id} className="device-option"><Volume2 size={15}/><span>{item.name}</span><small>{item.validated?'可用于 G10':'其他虚拟端点'}</small></div>)}</div>
-      <div className="inline-note"><CircleHelp size={15}/><span>当前桥接输出固定到已验证的 VB-CABLE。其他虚拟麦克风尚未验证，暂不切换到未经测试的设备。</span></div>
+    <section className="panel settings-panel"><div className="panel-head"><div><h3>本机 VB-CABLE 路由</h3><p>先检测端点，确认后才运行合成验证。豆包等软件应选择录音端 CABLE Output。</p></div><button className="button outline small" onClick={onCheck} disabled={busy||state.service.running}><RefreshCw size={14}/>检测 VB-CABLE</button></div>
+      <div className="field-row"><div className="field-icon"><Headphones size={19}/></div><div className="field-main"><b>本机路由状态</b><small>{state.audio_route.message}</small></div><span className={`badge ${state.microphone.validated?'badge-green':'badge-muted'}`}>{state.microphone.validated?'已验证':'待检测 / 验证'}</span></div>
+      {state.audio_route.pair&&<div className="device-list">{(['render','capture'] as const).map(role=>{const item=state.audio_route.pair![role];return <div key={role} className="device-option"><Volume2 size={15}/><span>{role==='render'?'播放端（写入）':'录音端（读取）'}：{item.name}<small>{item.id}</small></span><small>{item.samplerate} Hz</small></div>;})}</div>}
+      <div className="action-row"><div><b>合成音频路由验证</b><small>仅测试虚拟端点，不保存录音；通过后保存本机证明，有效期 30 天。</small></div><button className="button outline small" disabled={busy||state.service.running||!state.audio_route.confirmation_token} onClick={onVerify}>{busy?'正在处理…':'确认并验证路由'}</button></div>
+      <div className="inline-note"><CircleHelp size={15}/><span>{state.audio_route.proof_path?`证明位置：${state.audio_route.proof_path}。`:'证明保存在本机数据目录。'}缺失、过期或端点变化时会拒绝启动桥接，请重新检测和验证。</span></div>
     </section>
 
     <section className="panel settings-panel"><div className="panel-head"><div><h3>红键自动唤起豆包输入法</h3><p>自动唤起尚未通过本机实测，当前开关仅用于诊断。</p></div><Toggle checked={state.settings.voice.auto_wake_doubao} onChange={onAuto}/></div>
