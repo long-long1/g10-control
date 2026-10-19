@@ -370,3 +370,12 @@ G10-AudioBridge.exe  093124223A595629184B3ED4E8506390B79E0500A4298CAD46DC944A946
 - `setup-progress.json` 保存当前步骤，支持前后切换、重新检测、暂时收起和退出后继续。环境/设备/端点/路由各自为未检测、检测中、通过、失败或待用户操作；实际数据根、Portable/LocalAppData 和回退原因始终可见。
 - 完成条件由后端实时门槛计算，不信任保存的 completed 单字段或客户端状态；环境失败、设备证据缺失/过期、路由未检测/过期均不能完成。重启后进度保留，但尚未重新确认的环境/端点不会伪标为全部成功。
 - 后端向导/设备/路由相关 **37/37** 测试，桌面全部 **24/24**，前端状态及实际组件服务端渲染 **7/7** 测试，TypeScript/Vite 构建通过。渲染测试覆盖五步、无硬件自动调用、未完成禁用、全部门槛通过才可完成，以及环境错误和回退路径展示。真实 BLE 未执行，因此当前电脑的向导设备步骤仍应为待验证。
+
+### 阶段四：正常窗口与生命周期
+
+- 增加显式 `--lifecycle-diagnostic REPORT`，走生产 `main()`、实际 pywebview 窗口、托盘和 Windows mutex。这个模式在后端先拒绝服务启动、BLE 扫描/选择/兼容性、端点检测/验证、按键观察和启动项写入；不靠操作者避免点击来保证安全。前端仍正常连接 API，使用隔离配置。
+- **源码实际运行通过**：`output/beta-source-lifecycle.json` 的 `normal_ui_visible/tray_ready/close_to_tray/tray_restore/single_instance/settings_roundtrip/safe_exit` 均 true，8 项禁止业务入口被阻止。第二源码进程实际因 mutex 退出。没有键鼠输入模拟；隐藏走实际关闭处理，恢复/退出调用生产托盘菜单 callback。
+- **冻结 EXE 实际运行通过**：先正常可见 UI、托盘、隐藏、恢复、单实例、无业务安全退出，再移动整个隔离目录到中文/空格路径重跑。两次均成功；移动后实际读回增益 6 和向导步骤 2。日志 `output/beta-stage4-lifecycle.log`，报告 `output/beta lifecycle a3_wguoj/`。程序均自行退出，未留下 G10 进程。窗口可见性用实际 Win32 IsWindowVisible 检查，不是只检查 mock 方法被调用。
+- `get_status` 明确返回冻结版按键观察器不可用，UI 禁用按钮并显示原因。Windows 启动项状态可以识别旧/移动后的命令，只有用户再次明确确认才修复当前用户路径；真实启动项本轮未写。相关注册表写入全部在 mock 下测试。依赖缺失在窗口创建前报错/清理，向导展示中文处理方式；未卸载真实 WebView2/.NET 或驱动。
+- 安全退出先停止按键观察再停止桥接；清理失败保持窗口供重试，主循环 finally 确保其他清理和 mutex 释放尝试不被前一步异常跳过。没有强杀 BLE 进程。
+- 桌面 **33/33**（新增 9 项 shell/注册表/缺依赖/退出检查），环境向导 **7/7**，前端 **7/7** 与 TypeScript/Vite 构建通过。重新 clean 构建 PyInstaller 成功，日志 `output/beta-stage4-build.log`。以上实际生命周期检查均在非业务模式下，不能替代真实 BLE/音频桥接退出测试。

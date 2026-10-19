@@ -16,6 +16,8 @@ export type Snapshot = {
   device: { name:string; address:string; transport:string; vid:string|null; pid:string|null; battery:number|null };
   device_setup: DeviceSetupStatus;
   setup: SetupStatus;
+  shell:{key_observer_available:boolean;key_observer_reason:string;nonbusiness:boolean};
+  startup:{enabled:boolean;repair_needed:boolean;error?:string};
   microphone: { name:string; id:string; validated:boolean; is_active:boolean };
   audio_route: AudioRouteStatus;
   settings: Settings;

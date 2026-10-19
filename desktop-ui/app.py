@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 from app_runtime import (BridgeSupervisor, G10_ADDRESS, PROJECT_ROOT, RAW_INPUT, SettingsStore,
-                         PATHS, _local_data, autostart_command, default_settings, normalize_settings)
+                         PATHS, _local_data, autostart_command, default_settings, normalize_settings, require_address)
 
 APP = Path(__file__).resolve().parent
 LOGS = _local_data() / 'logs'
@@ -36,7 +36,8 @@ class SingleInstance:
             self.kernel.CloseHandle(self.handle); self.handle = None
 
 class Application:
-    def __init__(self):
+    def __init__(self, nonbusiness=False):
+        self._nonbusiness = nonbusiness
         self._store = SettingsStore()
         self._supervisor = BridgeSupervisor(self._store)
         self._keys = KeyDetection()
@@ -51,9 +52,18 @@ class Application:
         state['settings'] = self._store.load()
         state['runtime'] = {'log_directory': str(self._supervisor.logs),
                             'service_log_directory': str(self._supervisor.run_dir) if self._supervisor.run_dir else None}
+        state['shell'] = {'key_observer_available': not PATHS.frozen and PYTHON_PATH.is_file() and not getattr(self, '_nonbusiness', False),
+                          'key_observer_reason': 'Portable 版本未包含按键观察器。' if PATHS.frozen else '需要源码 Python 环境及明确设备配置。',
+                          'nonbusiness': getattr(self, '_nonbusiness', False)}
+        state['startup'] = self.autostart_status() if not getattr(self, '_nonbusiness', False) else {'enabled': False, 'repair_needed': False}
         return state
 
+    def _require_business(self):
+        if getattr(self, '_nonbusiness', False):
+            raise RuntimeError('隔离诊断禁止 BLE、音频、按键及启动项写入操作。')
+
     def start_service(self):
+        self._require_business()
         result = self._supervisor.start()
         log.info('Audio service start requested: %s', result)
         return result
@@ -64,6 +74,7 @@ class Application:
         return result
 
     def scan_ble_devices(self):
+        self._require_business()
         with self._supervisor.lock:
             self._require_audio_idle()
             return self._supervisor.devices.scan()
@@ -78,11 +89,13 @@ class Application:
         return self._supervisor.wizard.complete()
 
     def select_ble_device(self, identity):
+        self._require_business()
         with self._supervisor.lock:
             self._require_audio_idle()
             return self._supervisor.devices.select(identity)
 
     def check_ble_compatibility(self, confirmed=False):
+        self._require_business()
         with self._supervisor.lock:
             self._require_audio_idle()
             return self._supervisor.devices.check(confirmed)
@@ -125,11 +138,13 @@ class Application:
             raise RuntimeError('请先安全停止所有 G10 音频桥接，再检测或验证 VB-CABLE。')
 
     def detect_audio_route(self):
+        self._require_business()
         with self._supervisor.lock:
             self._require_audio_idle()
             return self._supervisor.routes.detect()
 
     def verify_audio_route(self, token, confirmed=False):
+        self._require_business()
         with self._supervisor.lock:
             self._require_audio_idle()
             return self._supervisor.routes.verify(token, confirmed)
@@ -138,12 +153,13 @@ class Application:
         return self._supervisor.logs_tail(120)
 
     def get_autostart(self):
-        return self.is_autostart()
+        return False if getattr(self, '_nonbusiness', False) else self.is_autostart()
 
     def get_diagnostics(self):
         return self._supervisor.export_diagnostics()
 
     def start_key_detection(self):
+        self._require_business()
         return self._keys.start()
 
     def stop_key_detection(self):
@@ -153,6 +169,7 @@ class Application:
         return self._keys.snapshot()
 
     def set_autostart(self, enabled, confirmed=False):
+        self._require_business()
         import winreg
         if enabled and not confirmed:
             raise ValueError('启用登录后启动前需要在确认框中同意修改当前用户的启动项。')
@@ -175,6 +192,18 @@ class Application:
                 return bool(value)
         except FileNotFoundError:
             return False
+
+    @staticmethod
+    def autostart_status():
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run') as key:
+                value, _ = winreg.QueryValueEx(key, 'G10Control')
+                return {'enabled': bool(value), 'repair_needed': bool(value) and value != autostart_command()}
+        except FileNotFoundError:
+            return {'enabled': False, 'repair_needed': False}
+        except OSError as exc:
+            return {'enabled': False, 'repair_needed': False, 'error': f'无法读取 Windows 启动项：{exc}'}
 
     def set_close_to_tray(self, enabled):
         value = self._store.load(); value['behavior']['close_to_tray'] = bool(enabled)
@@ -203,12 +232,13 @@ class Application:
 
     def _exit_when_safe(self):
         try:
+            self._keys.stop()
             self._supervisor.stop()
         except Exception:
             log.exception('Safe shutdown did not complete')
             self.exit_requested = False
             if self._window:
-                self._window.evaluate_js("window.g10SetExitError && window.g10SetExitError('蓝牙服务还在清理，请稍后重试。')")
+                self._window.evaluate_js("window.g10SetExitError && window.g10SetExitError('后台服务仍在安全清理，请稍后重试。')")
             return
         self.exit_allowed = True
         if self._tray:
@@ -259,7 +289,7 @@ class KeyDetection:
             if getattr(self, '_log', None) and not self._log.closed:
                 self._log.close()
             self.proc = None
-            if not G10_ADDRESS:raise RuntimeError('请先配置本机 G10 地址；不会监听所有键盘。')
+            target = require_address()
             if not PYTHON_PATH.exists():raise RuntimeError('项目虚拟环境找不到 python.exe。')
             self.events_path.unlink(missing_ok=True); self.stop_path.unlink(missing_ok=True)
             self.ready_path = self.root / 'ready.signal'; self.ready_path.unlink(missing_ok=True)
@@ -269,7 +299,7 @@ class KeyDetection:
             try:
                 self.proc = subprocess.Popen(
                     [str(PYTHON_PATH), str(RAW_INPUT),
-                     '--match', G10_ADDRESS.lower(), '--seconds', '86400', '--events-jsonl', str(self.events_path),
+                     '--match', target.lower(), '--seconds', '86400', '--events-jsonl', str(self.events_path),
                      '--ready-file', str(self.ready_path), '--stop-file', str(self.stop_path),
                      '--output', str(self.root/'summary.json')],
                     cwd=PROJECT_ROOT, stdin=subprocess.DEVNULL,
@@ -317,15 +347,20 @@ class KeyDetection:
 
 PYTHON_PATH = PROJECT_ROOT / '.venv' / 'Scripts' / 'python.exe'
 
-def main():
+def main(lifecycle_report=None):
     import webview
     instance = SingleInstance()
     if instance.already_running:
         instance.close()
+        if lifecycle_report:
+            Path(lifecycle_report).write_text(json.dumps({'ok': True, 'already_running': True,
+                'business_started': False}), encoding='utf-8')
         return
     app = None
+    lifecycle = {'ok': False, 'business_started': False}
+    lifecycle_done = threading.Event()
     try:
-        app = Application()
+        app = Application(nonbusiness=lifecycle_report is not None)
         bundle = PATHS.web_index
         if not bundle.is_file():
             raise RuntimeError(f'找不到已构建的界面资源：{bundle}')
@@ -336,15 +371,40 @@ def main():
         app._window = window
         window.events.closing += lambda: app.on_window_closing()
         app.create_tray()
+        if lifecycle_report:
+            from lifecycle_diagnostics import exercise_lifecycle
+            def on_loaded():
+                try:
+                    lifecycle.update(exercise_lifecycle(app, Path(lifecycle_report)))
+                except Exception:
+                    import traceback
+                    lifecycle['error'] = traceback.format_exc()
+                finally:
+                    lifecycle_done.set()
+                    app._tray.menu.items[1](app._tray)
+            window.events.loaded += on_loaded
+            def watchdog():
+                if not lifecycle_done.wait(25):
+                    lifecycle['error'] = 'Lifecycle diagnostic timed out'
+                    app.request_exit()
+            threading.Thread(target=watchdog, daemon=True).start()
         webview.start(gui='edgechromium', debug=False, private_mode=False,
                       storage_path=str(PATHS.data_path('webview')))
     finally:
-        if app:
-            app._keys.stop()
-            app._supervisor.stop()
-            if app._tray:
+        try:
+            if app:
+                try:
+                    app._keys.stop()
+                finally:
+                    app._supervisor.stop()
+        finally:
+            if app and app._tray:
                 app._tray.stop()
-        instance.close()
+            instance.close()
+            if lifecycle_report:
+                lifecycle['safe_exit'] = bool(app and app.exit_allowed)
+                lifecycle['ok'] = lifecycle['ok'] and lifecycle['safe_exit'] and 'error' not in lifecycle
+                Path(lifecycle_report).write_text(json.dumps(lifecycle, ensure_ascii=False, indent=2), encoding='utf-8')
 
 if __name__ == '__main__':
     main()

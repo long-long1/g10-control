@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from onboarding import SetupWizard, step_statuses
 from portable_paths import RuntimePaths
@@ -54,3 +54,13 @@ class WizardTests(unittest.TestCase):
         device = {'busy': True, 'compatible': False, 'state': 'scanning', 'selected': None}
         route = {'pair': None, 'validated': False, 'state': 'expired'}
         self.assertEqual(step_statuses([], device, route)[1:4], ['checking', 'failed', 'failed'])
+
+    def test_missing_dotnet_and_webview_have_actionable_errors(self):
+        from onboarding import environment_checks
+        with patch('winreg.OpenKey', side_effect=PermissionError('denied')), \
+                patch('startup_diagnostics.check_webview', side_effect=RuntimeError('missing runtime')):
+            checks = environment_checks()
+        self.assertFalse(checks[1]['passed'])
+        self.assertFalse(checks[2]['passed'])
+        self.assertIn('权限', checks[1]['detail'])
+        self.assertIn('手动安装', checks[2]['detail'])
