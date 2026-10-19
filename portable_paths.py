@@ -1,11 +1,12 @@
 """Resolve application resources, executable, and writable user data locations.
 
-This module is intentionally standalone. The current desktop runtime does not
-import it yet; callers can inject paths and a write probe for offline tests.
+Callers can inject paths and a write probe for offline tests. Runtime callers
+share one resolution so configuration and subprocesses agree on the data root.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import os
 from pathlib import Path
 import sys
@@ -31,6 +32,11 @@ class RuntimePaths:
     data_dir: Path
     portable: bool
     fallback_reason: str | None = None
+    frozen: bool = False
+
+    @property
+    def web_index(self) -> Path:
+        return self.resource('web/dist/index.html' if self.frozen else 'desktop-ui/web/dist/index.html')
 
     def resource(self, relative: str | Path) -> Path:
         """Return a resource path constrained to the resolved resource root."""
@@ -95,7 +101,7 @@ def resolve_paths(
         portable_data = executable_dir / "data"
         try:
             probe(portable_data)
-            return RuntimePaths(resource_dir, executable_dir, portable_data.resolve(), True)
+            return RuntimePaths(resource_dir, executable_dir, portable_data.resolve(), True, frozen=is_frozen)
         except OSError as exc:
             fallback_reason = str(exc) or exc.__class__.__name__
 
@@ -103,4 +109,9 @@ def resolve_paths(
         local_app_data = os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
     fallback_data = Path(local_app_data).resolve() / "G10Control"
     probe(fallback_data)
-    return RuntimePaths(resource_dir, executable_dir, fallback_data, False, fallback_reason)
+    return RuntimePaths(resource_dir, executable_dir, fallback_data, False, fallback_reason, is_frozen)
+
+
+@lru_cache(maxsize=1)
+def runtime_paths() -> RuntimePaths:
+    return resolve_paths()

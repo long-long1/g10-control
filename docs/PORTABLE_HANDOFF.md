@@ -1,6 +1,6 @@
 # G10 Control Portable 版本开发交接
 
-> 阶段：第一阶段审查与准备。本文记录代码现状和可复现的检查结果；没有执行 PyInstaller 打包、真实蓝牙测试、Windows 新机测试、硬件实验或系统设置修改。下一位接手者应从第二阶段第 1 步开始，不得把本文计划误读为已完成实现。
+> 最新阶段：第三轮 Portable 运行时路径接入与冻结启动诊断（2026-10-20），见第 11 节。第 1–9 节保留第一阶段审查记录，第 10 节保留第二轮准备基线；其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。不得将无硬件诊断通过理解为设备业务或干净电脑验收通过。
 
 ## 1. 仓库状态
 
@@ -185,3 +185,95 @@ settings_file = paths.data_path("settings.json")
 6. 项目总体许可证仍未确定。不得生成/发布 ZIP 或 Release，直到依赖许可与分发授权审查完成。
 
 本轮只改路径准备件、测试、构建准备、忽略规则和本文档；没有修改 `app_runtime.py`、`g10_audio_bridge.py`、协议、ADPCM 或设备配置流程。
+
+## 11. 第三轮：Portable 运行时接入与冻结启动诊断（2026-10-20）
+
+本轮基于 `a322f32cb3e4b5d67989d12bdb444d020a93c752`，仅处理运行时路径、冻结子进程与本地启动诊断。没有修改 `g10_audio_bridge.py`、BLE/ATVV、ADPCM、WASAPI 或缓冲算法；没有连接 G10、启动桥接业务、打开音频流、执行键鼠模拟、安装驱动或发布 ZIP/Release。
+
+### 运行时路径及兼容边界
+
+- `portable_paths.runtime_paths()` 缓存单次解析，主运行时、冻结配置及入口共用它；`RuntimePaths.frozen` 区分启动方式，`web_index` 区分源码与冻结静态资源布局。源码资源为仓库 `desktop-ui/web/dist/index.html`；冻结资源为 `<sys._MEIPASS>/web/dist/index.html`，companion EXE 则始终在 `<sys.executable.parent>`，均不依赖工作目录。
+- spec 会在 onedir 的 EXE 同级生成空 `portable.marker`。有 marker 时尝试 `data/` 并做实际临时文件写入探测；失败回退 `%LOCALAPPDATA%/G10Control`，保存 `fallback_reason`。两个目录都不可写时明确报错，不吞掉错误。
+- 主程序设置为数据根 `settings.json`，桌面/桥接日志在 `logs/`，状态及停止信号在 `runtime/`，按键观察的源码版临时文件也在数据根。WebView2 的用户数据位于 `webview/`；隐藏诊断使用独立 `webview-diagnostic/`。快照/诊断报告返回实际数据路径、portable 标记和回退原因。
+- 源码版仍读取仓库旁的本机 `local-settings.json`，并保留环境变量覆盖；冻结版只从所选数据根 `local-settings.json` 读取本机身份，不读取 `_internal` 或开发机旁的身份文件。没有静默复制旧身份或配置。本轮统一设置目录后，旧 `%APPDATA%/G10ControlPublic` 设置不会自动迁移；旧本地资料保留原处。
+- 源码桥接仍为 `.venv/Scripts/pythonw.exe g10_audio_bridge.py ...`；冻结桥接为同级 `G10-AudioBridge.exe ...`，cwd 为 EXE 目录。原有业务参数、增益、默认关闭的自动唤起、状态文件和安全停止契约保留。
+- 外部进程检测兼容脚本绝对路径及冻结 EXE 的 `exe/name/cmdline[0]`；能阻止其他便携副本的桥接实例，只检查、不终止外部进程。正常停止写信号并等待；超时保留进程所有权，可重试，绝不 `kill/terminate`。
+- 窗口模式 PyInstaller 会将 Python stdio 设为 `None`；入口对此做文件重定向。受监督桥接重开对应 `service.log`，启动错误另存数据根 `logs/g10-bridge-last-error.txt`。新增入口仅包装现有 `main()`，不改业务实现。
+- 当前用户启动项在冻结模式保存 EXE 命令，源码模式保存 Python + 脚本命令；只测试命令构造，本轮没有写注册表。Portable 移动后既有启动项仍需要用户修复。
+- 当前 spec 没有 `G10-KeyObserver.exe`。冻结版按键观察入口会明确拒绝并提示使用源码版；本轮不新增 helper，也未执行按键观察。源码观察器补齐既有 `time` 导入遗漏。
+
+### 安全诊断方法
+
+`desktop-ui/control_entry.py` 与 `bridge_entry.py` 为冻结入口。只有显式 `--diagnose-startup REPORT_JSON` 才进入诊断；解析器拒绝业务启动参数。诊断不调用桥接业务 `main()` 的正常分支：只以 `--help` 执行参数解析，并在任何业务许可、设备配置和路由证明检查前退出。进行必需模块导入、numpy 内存计算、CFFI 声明解析、WinRT DataWriter/DataReader 纯内存往返。PortAudio 只随 sounddevice 做库初始化，没有查询/打开录放音流。
+
+主程序诊断会初始化 Application 的设置及监督器对象，确认 service 没启动，校验 HTML 中 JS/CSS 是存在的本地相对文件。`--diagnose-webview` 另创建隐藏 WebView2 窗口加载实际 React 产物，**没有 `js_api`**，前端无法调用 BLE、音频、按键或注册表方法。DOM 检查 React 根节点、正文和样式表，完成即销毁窗口；有 20 秒窗口 watchdog 和 45 秒诊断进程超时。
+
+可复现命令（仓库根目录，构建后）：
+
+```powershell
+.\.venv\Scripts\python.exe build\diagnose_portable.py
+```
+
+该脚本仅复制两个 EXE、`_internal` 和 marker 到 `output/portable startup .../first location`，隔离 AppData、清除 G10/Python/WebView2 环境覆盖，将 PATH 限定到 Windows System32；从与程序不同的 cwd 启动。检查初始目录及移动到含中文/空格目录后运行，再用同名 `data` 文件阻止目录创建以实测回退；真实 ACL 拒绝另由注入 PermissionError 的测试覆盖。它不会修改系统 ACL。隔离副本、报告与日志保留在忽略的 `output/` 中，不是发行包。
+
+正常主程序启动显式选 `edgechromium`，预检查 pythonnet/WinForms、WebView2 托管 DLL、native loader 和 `GetAvailableBrowserVersionString`。缺依赖时记录日志及显示错误/手动安装说明，不自动安装，也不回退旧 MSHTML。当前依赖不只有 WebView2：仍需系统 .NET Framework（pywebview 6.2.1 的检查下限为 4.6.2）。没有模拟卸载系统 Runtime。
+
+依据：[PyInstaller 运行时目录](https://pyinstaller.org/en/stable/runtime-information.html)、[窗口模式 stdio 限制](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html)、[Microsoft WebView2 版本探测 API](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2environment.getavailablebrowserversionstring)。另核对本机固定版本的 pywebview `platforms/winforms.py`、`edgechromium.py` 和 pycparser/WinRT 源码及类型声明。
+
+### 构建警告审查
+
+两次 Analysis 原来会覆盖同一个 `warn-portable_onedir.txt`；现在 spec 分别保存 `build/portable_onedir/warn-control.txt`、`warn-bridge.txt`。本次两份各 311 条模块诊断记录（含 missing、excluded、runtime；集合一致）。没有通过 excludes 或压制日志来隐藏警告。
+
+| 组别 | 判断及证据 |
+|---|---|
+| `pwd/grp/posix/fcntl/termios/_posix*`、macOS 的 AppKit/WebKit、Android、Xlib/GTK、Qt/CEF | 平台分支或未选渲染器；目标为 Windows + WinForms/WebView2，不需要为这些模块增装依赖。 |
+| Bottle 的 gunicorn/gevent/twisted/mako 等可选服务器/模板，Pillow 的 olefile/defusedxml，setuptools 编译辅助模块 | 当前本地静态资源服务器、托盘内存图像不走这些分支；默认资源服务实际运行通过。当前不使用 TLS，自签名证书的 cryptography 分支也未使用。 |
+| `ConfigParser/cPickle/urllib.quote` 等旧 Python 名称、`annotationlib/_typeshed`、`ctypes._CData*`、multiprocessing 的函数/异常、`six.moves` 和 PyInstaller importer | 兼容/类型声明/动态提供的对象被当模块分析，不是本轮所需的新依赖；冻结模块导入已实际执行。不能据此宣称所有 multiprocessing 分支已验证。 |
+| `numpy._core.*` 大量函数/标量类型，yaml/threadpoolctl 等 | 多数是从扩展/重导出提供的属性，不是独立文件。冻结 numpy 导入及原生数组内存运算通过；yaml、f2py 编译及线程池控制等可选功能未使用。 |
+| `pycparser.lextab/yacctab`、`cffi._pycparser` | 固定的 pycparser 3.11 是递归下降解析器，兼容构造参数不再使用 PLY 表；CFFI 首选独立 pycparser，另有可选旧路径。两个 EXE 都实际完成 `FFI().cdef(...)`，没有缺表错误。 |
+| `System.*`、`Microsoft.Web`、`Microsoft`，旧 MSHTML 的 `WebBrowserInterop` | CLR 命名空间由 pythonnet 动态加载，不是常规 Python 包；实际 .NET/WebView2 DLL 加载、Runtime 版本探测和隐藏窗口渲染通过。旧 MSHTML 未选用。 |
+| `winrt.windows.system/ui/security/applicationmodel/networking` 和 `bluetooth.rfcomm` | 本机固定 WinRT 组件的类型声明涉及其他 API：如 FileRandomAccessStream 的用户接口、设备配对凭据/选择器颜色/后台触发器、经典蓝牙 HostName/RFCOMM。它们不等于 BLE/GATT 当前入口的导入失败。所需 Bluetooth、GATT、Enumeration、Streams、Foundation/Collections 均在两个冻结 EXE 导入成功，Streams 纯内存往返成功。未安装这些扩展命名空间，未声称相关 API 可用；GATT 硬件调用的依赖闭包仍待后续授权验证。 |
+
+结论限定为：**本轮覆盖的冻结导入、参数入口、内存逻辑和 WebView2 渲染没有发现真实必需依赖缺失**。没有以导入成功代替 WinRT 蓝牙、音频业务或全部可选分支运行验证。spec 明确收集 `pycaw.pycaw`，不依靠变量形式的动态 import 被自动识别；未增加或升级 `requirements.txt`。
+
+### 实际执行结果
+
+环境仍为仓库 `.venv` 的 Python 3.12.10、PyInstaller 6.22.3 / hooks 2026.8，Windows 11 x64（构建日志为 10.0.26200）。所有下列结果均为本轮实际执行，非计划：
+
+| 检查 | 结果 |
+|---|---|
+| 根目录 `.venv/Scripts/python.exe -m unittest discover -p "test_*.py" -v` | **46 run, 46 passed**，0 failure/error/skip。日志 `output/portable-root-tests.log`。 |
+| `desktop-ui` 内 `../.venv/Scripts/python.exe -m unittest discover -p "test_*.py" -v` | **18 run, 18 passed**，含原 5 项与新增 13 项。日志 `output/portable-desktop-tests.log`。不要只运行旧 `test_runtime` 而漏掉新 `test_portable_runtime`。 |
+| `build/build_portable.ps1` | `npm ci`、`npm run build` 及 PyInstaller 成功，退出码 0；React 1578 modules。日志 `output/portable-build-round3.log`。 |
+| 最终 `.venv/Scripts/python.exe -m PyInstaller --clean --noconfirm build/portable_onedir.spec` | **退出码 0，Build complete**；最后一轮入口及 stdio 修改已纳入此构建。日志 `output/portable-build-final.log`。 |
+| `build/diagnose_portable.py` 最终运行 | **6 次独立 EXE 启动全部退出码 0，全部报告 ok=true**。日志 `output/portable-startup-final.log`，报告目录 `output/portable startup cdu21iwn/`。 |
+
+新增测试覆盖：源码/冻结资源根、目录移动、无 marker、数据写入拒绝/双目录拒绝、冻结配置身份路径、统一设置/日志/状态根；以假 Popen/进程枚举验证两种命令、原参数、默认不自动唤起、缺 helper、启动失败关闭句柄、重复启动/外部桥接阻止、正常停止、已退出停止、超时不强杀且可重试、冻结启动项命令、未打包按键观察器的明确拒绝、窗口版 service.log、资源越界/缺失、诊断不调用业务方法。没有删除或跳过原测试。
+
+最终 6 次启动记录：
+
+| EXE / 场景 | 实际验证 | 边界 |
+|---|---|---|
+| `G10-AudioBridge.exe` / 初始便携目录 | 冻结模块导入、numpy/CFFI/WinRT 内存检查、桥接 `--help`、正确 portable 路径；自行退出 0 | 没有给业务许可参数，没有调用正常桥接分支。 |
+| `G10-Control.exe` / 初始便携目录 | 同上，加 Application 初始化与实际 React/WebView2 渲染；自行退出 0 | 没有暴露 JS 业务 API，没有创建托盘或测试 mutex。 |
+| `G10-Control.exe` / 移动到中文及空格目录 | 再次实际渲染，data 根跟随新目录，测试哨兵文件仍可读；自行退出 0 | 不代表已有 Windows 启动项随移动自动修复。 |
+| `G10-AudioBridge.exe` / 移动目录 | 导入/内存/参数检查再次通过，路径正确；自行退出 0 | 未连接 BLE。 |
+| `G10-Control.exe` / data 创建失败 | 保存明确 WinError 183 回退原因，数据及 WebView2 profile 落到隔离 LocalAppData；实际 React 渲染、自行退出 0 | 用同名文件触发实际创建失败，未更改系统 ACL。 |
+| `G10-AudioBridge.exe` / 同一失败场景 | 同样选择隔离 LocalAppData，导入/内存/参数检查通过；自行退出 0 | 未打开音频流。 |
+
+三个渲染场景均报告 `renderer=edgechromium`、Runtime `155.0.4283.62`、`react_children=1`、`stylesheets=2`、`text_length=653`，加载实际 `index-D9DxHMbo.js` / `index-C3blFDMn.css`。资源来自 pywebview 自带 Bottle 的 `127.0.0.1` 静态服务器，不依赖 Vite、Node 或外部网络。所有报告 `business_started=false`；主程序另报告 `service_running=false`。诊断结束后未发现存活的 G10 主/桥接 EXE。本轮确实运行了两个生成的 EXE，但**没有执行正常业务启动、托盘交互、单实例冲突或真实子进程的 BLE 清理验收**，停止契约只以假进程测试验证。
+
+最终本机构建 EXE SHA-256（仅定位本轮二进制，不是发行签名）：
+
+```text
+G10-Control.exe      18A77E4D8AA3E24797F112F4DFE7E476926C45B546D6A4AD480889E95F1FBAF6
+G10-AudioBridge.exe  8CD494E3F24B8FA984AEFF19DF9D3B9DE09CC91EFAC24111CE548CF862564EED
+```
+
+### 下一轮仍需完成（本轮结束后等待用户确认）
+
+1. **音频路由证明**：核心 `select_verified_pair()` 仍依赖原 `ROOT/output/phase3-vbcable-probe`，本轮未移动或伪造证明。冻结业务目前不能因此被宣称可用。需设计由用户确认的合成路由验证，将证明绑定当前端点 ID/采样率并写入数据根；缺失/失效时安全拒绝。禁止为了打包放宽证明门槛或改动音频算法。
+2. **设备发现**：去除“已有地址即支持”的发行依赖，经用户启动扫描、选择设备和受控协议能力检查判定兼容；设备身份只保存在本机数据根。当前固定展示的 VID/PID/validated 文案仍不代表实时发现。
+3. **首次运行向导**：解释无设备/未知能力、缺失或歧义的 VB-CABLE、未验证路由、WebView2 缺失与手动处理；显示实际数据目录及只读回退原因。完善配置导入和启动项移动提示。本轮没有实现完整向导或设备 UX。
+4. **干净电脑验证**：隔离 PATH 不是卸载 Python/Node，也不是干净 Windows 验收。需在无开发环境的 Windows 11 x64 上验证 WebView2/.NET 有无、真正只读目录 ACL、标准用户、首次启动与正常托盘/单实例/退出；获得明确设备授权后另验桥接真实正常启动、重复实例阻止、安全停止/超时、VB-CABLE 与 G10 音频。按键观察 helper 仍未打包。
+5. **发行前约束**：总体许可证、第三方 notice/SBOM、许可材料及隐私 allowlist 审查仍未完成。本轮只提交源码/测试/交接文档；未创建 ZIP、未上传二进制、未推送 Release。后续公开分发需单独确认。

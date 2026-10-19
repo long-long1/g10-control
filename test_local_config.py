@@ -5,9 +5,18 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import local_config as config
+from portable_paths import RuntimePaths
 
 
 class LocalConfigTests(unittest.TestCase):
+    def test_frozen_identity_uses_writable_data_not_bundled_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            paths = RuntimePaths(root / '_internal', root, root / 'data', True, frozen=True)
+            with patch.object(config.sys, 'frozen', True, create=True), patch(
+                    'portable_paths.runtime_paths', return_value=paths):
+                self.assertEqual(config.config_path(), root / 'data/local-settings.json')
+
     def test_missing_identity_refuses_connection(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(config,'CONFIG',Path(folder)/'missing.json'), patch.dict(os.environ,{},clear=True):
             self.assertEqual(config.address(),'')

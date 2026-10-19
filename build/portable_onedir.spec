@@ -1,4 +1,4 @@
-# Initial build draft only. This does not produce a release-ready portable app.
+# Local onedir build. Hardware/new-machine acceptance is still required.
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -19,9 +19,9 @@ for package in (
 ):
     WINRT_IMPORTS += collect_submodules(package)
 
-common_hiddenimports = WINRT_IMPORTS
+common_hiddenimports = WINRT_IMPORTS + ['pycaw.pycaw']
 main_analysis = Analysis(
-    [str(ROOT / "desktop-ui" / "app.py")],
+    [str(ROOT / "desktop-ui" / "control_entry.py")],
     pathex=[str(ROOT), str(ROOT / "desktop-ui")],
     binaries=[],
     datas=[(str(WEB_DIST), "web/dist")],
@@ -33,6 +33,9 @@ main_analysis = Analysis(
     noarchive=False,
     optimize=0,
 )
+# Analysis writes the same warning filename for both entry points. Keep each
+# report so the bridge analysis cannot hide the control's dependency warnings.
+Path(WARNFILE).with_name('warn-control.txt').write_text(Path(WARNFILE).read_text(encoding='utf-8'), encoding='utf-8')
 main_pyz = PYZ(main_analysis.pure)
 main_exe = EXE(
     main_pyz,
@@ -49,7 +52,7 @@ main_exe = EXE(
 )
 
 bridge_analysis = Analysis(
-    [str(ROOT / "g10_audio_bridge.py")],
+    [str(ROOT / "bridge_entry.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=[],
@@ -61,6 +64,7 @@ bridge_analysis = Analysis(
     noarchive=False,
     optimize=0,
 )
+Path(WARNFILE).with_name('warn-bridge.txt').write_text(Path(WARNFILE).read_text(encoding='utf-8'), encoding='utf-8')
 bridge_pyz = PYZ(bridge_analysis.pure)
 bridge_exe = EXE(
     bridge_pyz,
@@ -76,8 +80,7 @@ bridge_exe = EXE(
     disable_windowed_traceback=False,
 )
 
-# Keep two entry-point executables in one onedir output tree. This is only a
-# build-layout draft: runtime subprocess discovery has not been integrated.
+# Keep two entry points in one onedir output tree with a shared _internal.
 COLLECT(
     main_exe,
     bridge_exe,
@@ -88,3 +91,4 @@ COLLECT(
     upx_exclude=[],
     name="G10-Control",
 )
+(Path(DISTPATH) / 'G10-Control' / 'portable.marker').write_text('', encoding='utf-8')

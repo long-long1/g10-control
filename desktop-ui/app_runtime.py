@@ -19,16 +19,31 @@ BRIDGE = PROJECT_ROOT / 'g10_audio_bridge.py'
 RAW_INPUT = PROJECT_ROOT / 'raw_input.py'
 PYTHONW = PROJECT_ROOT / '.venv' / 'Scripts' / 'pythonw.exe'
 sys.path.insert(0, str(PROJECT_ROOT))
+from portable_paths import RuntimePaths, runtime_paths
 from local_config import address, cable_capture_id, require_address, require_cable_capture_id
+PATHS = runtime_paths()
 CABLE_ID = cable_capture_id()
 G10_ADDRESS = address()
 G10_NAME = 'G10'
 
 def _app_data() -> Path:
-    return Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming')) / 'G10ControlPublic'
+    return PATHS.data_dir
 
 def _local_data() -> Path:
-    return Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'G10ControlPublic'
+    return PATHS.data_dir
+
+
+def bridge_command(paths: RuntimePaths) -> list[str]:
+    if paths.frozen:
+        return [str(paths.executable_dir / 'G10-AudioBridge.exe')]
+    return [str(PYTHONW), str(BRIDGE)]
+
+
+def autostart_command() -> str:
+    args = [str(Path(sys.executable).resolve())]
+    if not PATHS.frozen:
+        args.append(str(APP_ROOT / 'app.py'))
+    return subprocess.list2cmdline(args)
 
 def default_settings() -> dict:
     return {
@@ -88,9 +103,10 @@ def normalize_settings(value: dict) -> dict:
 
 class BridgeSupervisor:
     """Owns only the G10 service process. The UI can close without owning BLE resources."""
-    def __init__(self, settings: SettingsStore):
+    def __init__(self, settings: SettingsStore, paths: RuntimePaths | None = None):
         self.settings = settings
-        self.root = _local_data()
+        self.paths = paths or PATHS
+        self.root = self.paths.data_dir
         self.logs = self.root / 'logs'
         self.state_dir = self.root / 'runtime'
         self.root.mkdir(parents=True, exist_ok=True)
@@ -110,12 +126,17 @@ class BridgeSupervisor:
         own_pid = os.getpid()
         results = []
         target = str(BRIDGE.resolve()).casefold()
-        for process in psutil.process_iter(['pid', 'cmdline', 'name']):
+        for process in psutil.process_iter(['pid', 'cmdline', 'name', 'exe']):
             try:
                 if process.info['pid'] == own_pid:
                     continue
                 command = process.info.get('cmdline') or []
-                if any(str(arg).casefold() == target for arg in command):
+                executable = process.info.get('exe') or (command[0] if command else '')
+                # Block another frozen bridge even if it belongs to a moved/copy
+                # of the portable directory. Never terminate processes we found.
+                frozen_bridge = (Path(executable).name.casefold() == 'g10-audiobridge.exe'
+                                 or str(process.info.get('name') or '').casefold() == 'g10-audiobridge.exe')
+                if frozen_bridge or any(str(arg).casefold() == target for arg in command):
                     results.append({'pid': process.info['pid'], 'name': process.info.get('name') or 'python'})
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
@@ -131,15 +152,16 @@ class BridgeSupervisor:
             if external:
                 names = ', '.join(str(item['pid']) for item in external)
                 raise RuntimeError(f'检测到另一实例正在运行蓝牙桥接（进程 {names}）。请先在它的窗口中退出，再由 G10 Control 启动。')
-            if not PYTHONW.exists():
-                raise RuntimeError(f'找不到现有 Python 运行环境：{PYTHONW}')
-            self.run_dir = self.logs / datetime.now().strftime('bridge-%Y%m%d-%H%M%S')
+            launcher = bridge_command(self.paths)
+            if not Path(launcher[0]).is_file():
+                raise RuntimeError(f'找不到桥接运行程序：{launcher[0]}')
+            self.run_dir = self.logs / datetime.now().strftime('bridge-%Y%m%d-%H%M%S-%f')
             self.run_dir.mkdir(parents=True, exist_ok=False)
             self.status_path.unlink(missing_ok=True)
             self.stop_path.unlink(missing_ok=True)
             self.stdout_path = self.run_dir / 'service.log'
             handle = self.stdout_path.open('ab', buffering=0)
-            args = [str(PYTHONW), str(BRIDGE), '--business-approval', '--allow-cccd',
+            args = launcher + ['--business-approval', '--allow-cccd',
                     '--headless', '--monitor-output', '--observe-ime', '--max-seconds', '0',
                     '--status-path', str(self.status_path), '--stop-file', str(self.stop_path),
                     '--output', str(self.run_dir / 'events')]
@@ -148,7 +170,8 @@ class BridgeSupervisor:
             if current['voice']['auto_wake_doubao']:
                 args.append('--doubao-ime')
             try:
-                self.proc = subprocess.Popen(args, cwd=PROJECT_ROOT, stdin=subprocess.DEVNULL,
+                cwd = self.paths.executable_dir if self.paths.frozen else PROJECT_ROOT
+                self.proc = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL,
                                              stdout=handle, stderr=subprocess.STDOUT,
                                              creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             except OSError:
@@ -200,6 +223,8 @@ class BridgeSupervisor:
             detail = backend.get('last_error') or '正在发现 ATVV 服务…'
         return {
             'application': {'name': APP_NAME, 'version': '0.1.0', 'single_instance': True},
+            'paths': {'data_directory': str(self.root), 'portable': self.paths.portable,
+                      'fallback_reason': self.paths.fallback_reason},
             'service': {'running': running, 'connection': connection, 'detail': detail,
                         'started_at': self.started_at,
                         'audio_active': bool(backend.get('audio_active')),

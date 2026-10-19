@@ -3,8 +3,16 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 
-CONFIG=Path(__file__).resolve().parent/'local-settings.json'
+def config_path():
+    if getattr(sys, 'frozen', False):
+        from portable_paths import runtime_paths
+        return runtime_paths().data_path('local-settings.json')
+    return Path(__file__).resolve().parent/'local-settings.json'
+
+
+CONFIG=config_path()
 
 
 def _value(key,environment):

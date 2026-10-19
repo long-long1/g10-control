@@ -8,11 +8,12 @@ import os
 from pathlib import Path
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog
 
 from app_runtime import (BridgeSupervisor, G10_ADDRESS, PROJECT_ROOT, RAW_INPUT, SettingsStore,
-                         _local_data, default_settings, normalize_settings)
+                         PATHS, _local_data, autostart_command, default_settings, normalize_settings)
 
 APP = Path(__file__).resolve().parent
 LOGS = _local_data() / 'logs'
@@ -125,7 +126,7 @@ class Application:
         key_path = r'Software\Microsoft\Windows\CurrentVersion\Run'
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE) as key:
             if enabled:
-                command = f'"{Path(sys.executable).resolve()}" "{Path(__file__).resolve()}"'
+                command = autostart_command()
                 winreg.SetValueEx(key, 'G10Control', 0, winreg.REG_SZ, command)
             else:
                 try: winreg.DeleteValue(key, 'G10Control')
@@ -219,6 +220,8 @@ class KeyDetection:
 
     def start(self):
         with self.lock:
+            if PATHS.frozen:
+                raise RuntimeError('Portable 版本尚未包含按键观察器，请使用源码版。')
             if self.proc and self.proc.poll() is None:return {'running': True}
             if getattr(self, '_log', None) and not self._log.closed:
                 self._log.close()
@@ -287,20 +290,27 @@ def main():
     if instance.already_running:
         instance.close()
         return
-    app = Application()
-    bundle = APP / 'web' / 'dist' / 'index.html'
-    if not bundle.exists():
-        raise RuntimeError('界面尚未构建。请运行 desktop-ui\\start_g10_control.cmd。')
-    window = webview.create_window('G10 Control', str(bundle), js_api=app,
-                                   width=1280, height=850, min_size=(980, 680), background_color='#f4f7fb')
-    app._window = window
-    window.events.closing += lambda: app.on_window_closing()
-    app.create_tray()
+    app = None
     try:
-        webview.start(debug=False)
+        app = Application()
+        bundle = PATHS.web_index
+        if not bundle.is_file():
+            raise RuntimeError(f'找不到已构建的界面资源：{bundle}')
+        from startup_diagnostics import check_webview
+        check_webview()
+        window = webview.create_window('G10 Control', str(bundle), js_api=app,
+                                       width=1280, height=850, min_size=(980, 680), background_color='#f4f7fb')
+        app._window = window
+        window.events.closing += lambda: app.on_window_closing()
+        app.create_tray()
+        webview.start(gui='edgechromium', debug=False, private_mode=False,
+                      storage_path=str(PATHS.data_path('webview')))
     finally:
-        app._keys.stop()
-        app._supervisor.stop()
+        if app:
+            app._keys.stop()
+            app._supervisor.stop()
+            if app._tray:
+                app._tray.stop()
         instance.close()
 
 if __name__ == '__main__':

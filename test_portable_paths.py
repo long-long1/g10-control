@@ -4,9 +4,32 @@ import unittest
 from pathlib import Path
 
 from portable_paths import resolve_paths
+from unittest.mock import patch
+import sys
 
 
 class PortablePathTests(unittest.TestCase):
+    def test_frozen_bundle_and_companion_roots_are_independent_of_cwd(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(sys, 'frozen', True, create=True), patch.object(
+                    sys, '_MEIPASS', str(root / 'program/_internal'), create=True):
+                paths = resolve_paths(executable=root / 'program/G10-Control.exe',
+                                      local_app_data=root / 'local')
+            self.assertTrue(paths.frozen)
+            self.assertEqual(paths.web_index, root / 'program/_internal/web/dist/index.html')
+            self.assertEqual(paths.executable_dir, root / 'program')
+            self.assertEqual(paths.data_dir, root / 'local/G10Control')
+            self.assertFalse(paths.portable)
+
+    def test_failure_of_both_data_roots_is_not_suppressed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            def deny(_):
+                raise PermissionError('no writable data root')
+            with self.assertRaisesRegex(PermissionError, 'no writable'):
+                resolve_paths(executable=Path(temp) / 'app.exe', portable=True,
+                              local_app_data=temp, probe_writable=deny)
+
     def test_portable_data_survives_moving_program_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
