@@ -21,6 +21,7 @@ PYTHONW = PROJECT_ROOT / '.venv' / 'Scripts' / 'pythonw.exe'
 sys.path.insert(0, str(PROJECT_ROOT))
 from portable_paths import RuntimePaths, runtime_paths
 from audio_route import AudioRoute
+from device_setup import DeviceSetup
 from local_config import address, cable_capture_id, require_address, require_cable_capture_id
 PATHS = runtime_paths()
 CABLE_ID = cable_capture_id()
@@ -109,6 +110,7 @@ class BridgeSupervisor:
         self.paths = paths or PATHS
         self.root = self.paths.data_dir
         self.routes = AudioRoute(self.paths)
+        self.devices = DeviceSetup()
         self.logs = self.root / 'logs'
         self.state_dir = self.root / 'runtime'
         self.root.mkdir(parents=True, exist_ok=True)
@@ -157,6 +159,7 @@ class BridgeSupervisor:
             if not Path(launcher[0]).is_file():
                 raise RuntimeError(f'找不到桥接运行程序：{launcher[0]}')
             _, _, pair = self.routes.require_verified()
+            self.devices.require_compatible(require_address())
             current = self.settings.load()
             if current['voice']['auto_wake_doubao']:
                 # Experimental auto-wake still uses its legacy explicit ID.
@@ -243,8 +246,10 @@ class BridgeSupervisor:
                         'cable_peak': backend.get('cable_peak', 0),
                         'error_count': backend.get('error_count', 0),
                         'error': backend.get('last_error')},
-            'device': {'name': G10_NAME, 'address': G10_ADDRESS, 'transport': 'Bluetooth LE',
-                       'vid': '0x620A', 'pid': '0x0407', 'battery': None},
+            'device_setup': self.devices.snapshot(),
+            'device': {'name': (self.devices.snapshot()['selected'] or {}).get('name') or '未选择设备',
+                       'address': address(), 'transport': 'Bluetooth LE',
+                       'vid': None, 'pid': None, 'battery': None},
             'audio_route': route,
             'microphone': {'name': capture.get('name', 'CABLE Output (VB-Audio Virtual Cable)'),
                            'id': capture.get('id', ''),

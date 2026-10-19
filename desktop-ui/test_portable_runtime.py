@@ -31,6 +31,7 @@ class PortableRuntimeTests(unittest.TestCase):
         process.returncode = 0
         process.wait.return_value = 0
         with patch.object(runtime, 'require_address'), patch.object(runtime, 'require_cable_capture_id', return_value=runtime.CABLE_ID), \
+                patch.object(supervisor.devices, 'require_compatible'), \
                 patch.object(supervisor.routes, 'require_verified', return_value=(None, None, {'capture': {'id': runtime.CABLE_ID}})), \
                 patch.object(runtime.BridgeSupervisor, '_external_bridge_processes', return_value=[]), \
                 patch.object(runtime.subprocess, 'Popen', return_value=process, **kwargs) as popen:

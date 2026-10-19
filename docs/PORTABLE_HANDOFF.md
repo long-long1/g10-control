@@ -355,3 +355,11 @@ G10-AudioBridge.exe  093124223A595629184B3ED4E8506390B79E0500A4298CAD46DC944A946
 - 真证明保存于当时 `dist/G10-Control/data/audio/route-proof.json`，保存后重新枚举及校验成功。为避免后续 clean 构建清除本机结果，另保留到忽略的 `output/beta-local-proof/route-proof.json`；**不带入干净 Beta 构建目录**。
 - 新增 `audio_idle.py` 元数据空闲检查，未知状态/读取失败均拒绝；生产 probe 包装在流操作前也执行同一检查，活动或无法确认时要求用户关闭相关程序。没有改原 WASAPI/波形/相关性核心。新增 `build/verify_local_route.py` 默认只读预检查，必须显式给 `--execute-when-idle` 才单次验证，无自动重试。
 - 相关离线测试：`python -m unittest -v test_audio_idle test_audio_route` **26/26 通过**，日志 `output/beta-stage1-tests.log`。该组模拟结果与上述一次真实测试明确分开。
+
+### 阶段二：设备发现、选择与兼容性
+
+- 新 `device_setup.py` 在用户点扫描后才调用 BleakScanner，显示实际广播名称、地址和服务提示；选择仅允许本次扫描列表里的身份，原子保存到源码/冻结各自的本机 local-settings。选择不表示兼容，重选撤销旧证据。没有执行真实 BLE 扫描或连接。
+- 兼容性入口要求独立明确确认，复用 `phase2_readonly.observe` 的目标服务、特征枚举和 CCCD 恢复，以及原 Controller 的单次 GET_CAPABILITIES 及解析。派生 CapabilityOnly 禁止任何非能力请求的发送，忽略触发/START/音频、不调用开麦和关麦、不保存通知；只在精确身份、ATVV 服务/特征属性、codec 2 / 128 字节能力和安全清理均通过时保存 30 天证据。
+- 继承已验证传输的边界：目前只能检查 Windows 已配对且名称为 G10 的候选；名称本身、广播服务本身都不能证明兼容，其他名称不会伪标兼容。完整服务/能力真实测试本轮未授权、保持待验。
+- UI 增加设备扫描、刷新、选择、检查入口；后端去除固定 VID/PID 实时检测假象，未知时显示“未检测/不适用”。主程序启动还需匹配有效设备证据；真实桥接仍会再走原协议能力门槛。
+- 模拟设备/协议测试 **16/16**（11 项新设备测试及 5 项原握手测试）；桌面全部 **24/24**。前端 TypeScript/Vite 构建成功。不会以这些模拟结果代替真实设备验收。

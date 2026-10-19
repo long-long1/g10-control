@@ -55,6 +55,7 @@ class RouteRuntimeTests(unittest.TestCase):
         process.poll.return_value = None
         with patch.object(runtime, 'require_address'), \
                 patch.object(runtime, 'require_cable_capture_id', side_effect=AssertionError('legacy ID')) as legacy, \
+                patch.object(self.supervisor.devices, 'require_compatible'), \
                 patch.object(self.supervisor, '_external_bridge_processes', return_value=[]), \
                 patch.object(runtime.subprocess, 'Popen', return_value=process) as popen:
             self.assertTrue(self.supervisor.start()['started'])
@@ -69,6 +70,7 @@ class RouteRuntimeTests(unittest.TestCase):
         self.supervisor.settings.save(value)
         with patch.object(runtime, 'require_address'), \
                 patch.object(runtime, 'require_cable_capture_id', return_value='stale-id'), \
+                patch.object(self.supervisor.devices, 'require_compatible'), \
                 patch.object(self.supervisor, '_external_bridge_processes', return_value=[]), \
                 patch.object(runtime.subprocess, 'Popen') as popen:
             with self.assertRaisesRegex(RuntimeError, '自动唤起配置'):

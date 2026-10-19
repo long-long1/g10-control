@@ -6,6 +6,7 @@ import {
   Settings2, ShieldCheck, Sparkles, TriangleAlert, Volume2, WandSparkles,
 } from 'lucide-react';
 import { nativeAPI, type EventRow, type KeySnapshot, type Settings, type Snapshot } from './api';
+import { DevicePanel } from './DevicePanel';
 
 type Page = 'home' | 'voice' | 'keys' | 'settings' | 'logs';
 const DEFAULT_CABLE = '';
@@ -20,6 +21,7 @@ const emptySnapshot: Snapshot = {
   application:{name:'G10 Control',version:'0.1.0',single_instance:true},
   service:{running:false,connection:'stopped',detail:'等待启动',started_at:null,audio_active:false,processed_audio_seconds:0,input_level_dbfs:-120,cable_level_dbfs:-120,cable_peak:0,error_count:0,error:null},
   device:{name:'G10',address:'',transport:'Bluetooth LE',vid:'0x620A',pid:'0x0407',battery:null},
+  device_setup:{state:'not_checked',message:'请扫描并选择设备；兼容性尚未验证。',selected:null,compatible:false,candidates:[],busy:false},
   microphone:{name:'CABLE Output (VB-Audio Virtual Cable)',id:DEFAULT_CABLE,validated:false,is_active:false},
   audio_route:{state:'missing',message:'请检测本机 VB-CABLE 并确认合成验证。',validated:false,pair:null,verified_at:null,proof_path:'',confirmation_token:null},
   settings:starterSettings,runtime:{log_directory:'',service_log_directory:null},
@@ -95,6 +97,16 @@ export default function App(){
     setBusy(true);setExitError('');
     try{await api.start_service();setToast('正在连接 G10…');await refresh();}
     catch(error){setToast(error instanceof Error?error.message:'蓝牙服务启动失败');}
+    finally{setBusy(false);}
+  }
+  async function deviceAction(action:'scan'|'select'|'check',identity=''){
+    if(!api)return setToast('设备操作需要运行桌面版。');
+    if(action==='check'&&!window.confirm('将连接选中的已配对设备，检查 ATVV 服务/特征，临时订阅通知并发送一次能力请求，随后恢复订阅。不会发送开麦命令。请勿按红键。是否继续？'))return;
+    setBusy(true);
+    try{
+      const result=action==='scan'?await api.scan_ble_devices():action==='select'?await api.select_ble_device(identity):await api.check_ble_compatibility(true);
+      setToast(result.message);await refresh();
+    }catch(error){setToast(error instanceof Error?error.message:'设备操作失败');}
     finally{setBusy(false);}
   }
   async function stopBridge(){
@@ -213,7 +225,7 @@ export default function App(){
       </header>
 
       <div className="page-scroll">
-        {page==='home'&&<HomePage state={state} busy={busy} onStart={()=>void startBridge()} onStop={()=>void stopBridge()} onPage={setPage} onExit={()=>void exitApplication()}/>}
+        {page==='home'&&<><DevicePanel state={state.device_setup} busy={busy||state.service.running} onScan={()=>void deviceAction('scan')} onSelect={id=>void deviceAction('select',id)} onCheck={()=>void deviceAction('check')}/><HomePage state={state} busy={busy} onStart={()=>void startBridge()} onStop={()=>void stopBridge()} onPage={setPage} onExit={()=>void exitApplication()}/></>}
         {page==='voice'&&<VoicePage state={state} busy={busy} gain={settings.voice.gain_db} onAuto={()=>void changeAutoWake()} onGain={changeGain} onCheck={()=>void checkMicrophone()} onVerify={()=>void verifyRoute()} latestError={latestVoiceError}/>}
         {page==='keys'&&<KeysPage state={keyState} onToggle={()=>void toggleKeyDetection()}/>}
         {page==='settings'&&<SettingsPage settings={settings} autostart={autostart} connected={connectedToHost} onAutostart={setLogin} onCloseChange={()=>settingSwitch('close_to_tray')} onChangeReconnect={()=>void changeSettings({...settings,behavior:{...settings.behavior,auto_reconnect:!settings.behavior.auto_reconnect}},'重连偏好已保存。')} onExport={()=>void exportSettings()} onImport={importSettings} onReset={()=>void resetSettings()} onReport={()=>void exportDiagnostics()} onExit={()=>void exitApplication()} error={exitError}/>}
@@ -242,7 +254,7 @@ function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy
     <section className="device-card panel">
       <div className="panel-head"><div><span className="section-kicker">CONNECTED DEVICE</span><h3>设备信息</h3></div><span className={`badge ${live?'badge-green':'badge-muted'}`}>{live?'在线':connecting?'连接中':'已配对'}</span></div>
       <div className="device-profile"><div className="remote-art"><div className="remote-top"/><div className="remote-pad"><span/><i/><b/></div><div className="remote-btns"><i/><i/><i/></div><div className="remote-mic"/></div><div className="profile-name"><b>{state.device.name} Air Mouse</b><small>三代蓝牙空中飞鼠 · {state.device.transport}</small></div></div>
-      <div className="device-facts"><Fact label="蓝牙地址" value={state.device.address}/><Fact label="VID / PID" value={`${state.device.vid} / ${state.device.pid}`}/><Fact label="连接类型" value="Bluetooth Low Energy"/><Fact label="电量" value={state.device.battery===null?'设备未提供已验证数据':`${state.device.battery}%`}/></div>
+      <div className="device-facts"><Fact label="蓝牙地址" value={state.device.address}/><Fact label="VID / PID" value={state.device.vid&&state.device.pid?`${state.device.vid} / ${state.device.pid}`:'未检测 / 不适用'}/><Fact label="连接类型" value="Bluetooth Low Energy"/><Fact label="电量" value={state.device.battery===null?'设备未提供已验证数据':`${state.device.battery}%`}/></div>
       <div className="device-footer"><div className="service-indicator"><span className={`status-dot ${live?'good':connecting?'pending':''}`}/><span>{state.service.detail}</span></div><button className="inline-link" onClick={()=>onPage('logs')}>查看状态日志<ChevronRight size={14}/></button></div>
     </section>
 

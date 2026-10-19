@@ -63,6 +63,21 @@ class Application:
         log.info('Audio service stopped: %s', result)
         return result
 
+    def scan_ble_devices(self):
+        with self._supervisor.lock:
+            self._require_audio_idle()
+            return self._supervisor.devices.scan()
+
+    def select_ble_device(self, identity):
+        with self._supervisor.lock:
+            self._require_audio_idle()
+            return self._supervisor.devices.select(identity)
+
+    def check_ble_compatibility(self, confirmed=False):
+        with self._supervisor.lock:
+            self._require_audio_idle()
+            return self._supervisor.devices.check(confirmed)
+
     def save_settings(self, value):
         current = self._store.load()
         incoming = normalize_settings(value)
