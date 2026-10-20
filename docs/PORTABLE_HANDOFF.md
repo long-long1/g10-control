@@ -574,3 +574,5 @@ sbom.cdx.json        3fb41b4c4e0cf3c841905fbda54c8dea2c5efd5620407b17cb4de276ba8
 对 `origin/main..main` 的 18 个提交及其新增文件历史执行了隐私/敏感模式和文件类型筛查，189 个唯一文本 blob 完成内容模式扫描。命中包括测试中的占位 MAC 样式值（`11:22:33:44:55:66`、`AA:BB:CC:DD:EE:FF`）、交接文档中描述性的本机路由证明路径，以及旧版 `docs/PORTABLE_HANDOFF.md` 中的工作区绝对路径（本节称为 `<workspace absolute path>`）。该值不是用户配置目录，也未包含账户名；项目路径由所有者在本轮明确提供并授权公开。当前版本已将该处泛化，旧提交仍保留原值；本轮不改写历史。未发现个人设备地址、凭据/令牌/密码、实际 route-proof 数据、录音或日志文件。新增历史文件中有一个 `pystray-0.19.5.tar.gz` 源码归档，无超过 5 MiB 的文件，也无 EXE、ZIP、DLL、PDB、音频或日志构建产物。当前 Actions 仅运行离线检查并在临时 runner 工作区构建/暂存候选；权限为 `contents: read`，无 artifact 上传、Release、发布凭据或真实硬件步骤。
 
 仓库已为 Public；本地 `main` 初始领先远端 18 个提交、落后 0 个提交。所有者本轮明确提供项目目录并授权公开源码，因此旧版交接文档中未含账户名的工作区路径属于已知披露内容；当前文档已将其泛化。推送完成后的 GitHub 最新提交 ID、MIT LICENSE 可见性和最终 ahead/behind 结果将在下方追记。本轮不发布 EXE/ZIP，不创建 Release。
+
+源码及本轮交接预检结果已通过普通 `git push origin main` 同步。源码同步提交为 `b924cee9bb7985e6837639350fdd50204cb60e52`；GitHub API 确认仓库 `visibility=public`、默认分支为 `main`、该提交可见，且根目录 `LICENSE` 可见并以 `MIT License` / `Copyright (c) 2026 WYL` 开头。推送后 `origin/main` 与本地 `main` 一致，ahead/behind 为 0/0。未创建 Release，未上传 EXE 或 ZIP。ATVV 来源授权疑点继续保持未解决状态；本轮同步不表示 MIT 重新授权或法律审查完成。
