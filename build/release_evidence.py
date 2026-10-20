@@ -27,6 +27,12 @@ def python_lock(path):
 
 def write_evidence(root, target, inventory, modules):
     locked = python_lock(root / 'requirements-build.lock.txt')
+    for name in ('requirements.txt', 'requirements-build.txt'):
+        direct = {normalized(package): version for line in (root / name).read_text(encoding='utf-8').splitlines()
+                  if line.strip() and not line.startswith(('#', '-r '))
+                  for package, version in [line.split('==', 1)]}
+        if any(locked.get(package) != version for package, version in direct.items()):
+            raise RuntimeError('Direct dependency/build lock mismatch: ' + name)
     installed = {normalized(d.metadata['Name']): d.version for d in metadata.distributions()}
     drift = [{'name': name, 'locked': version, 'installed': installed.get(name)}
              for name, version in sorted(locked.items()) if installed.get(name) != version]
@@ -100,6 +106,8 @@ def write_evidence(root, target, inventory, modules):
                                  if name and (root / name).is_file() and
                                  (name.endswith(('.py', '.ts', '.tsx', '.css', '.spec')) or name in
                                   {'desktop-ui/web/index.html', 'desktop-ui/web/package.json'})}
+    evidence['source_materials'] = {name: sha256(root / name) for name in sorted(tracked)
+                                    if name and (root / name).is_file()}
     for name, value in [('sbom.cdx.json', bom), ('build-evidence.json', evidence)]:
         (target / name).write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     lines = ['# Third-party license inventory', '',

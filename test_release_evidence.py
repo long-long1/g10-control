@@ -56,6 +56,11 @@ class ReleaseEvidenceTests(unittest.TestCase):
             self.run_evidence()
         self.assertFalse((self.target / 'sbom.cdx.json').exists())
 
+    def test_direct_requirements_cannot_diverge_from_full_lock(self):
+        (self.root / 'requirements.txt').write_text('example==9.0\n')
+        with self.assertRaisesRegex(RuntimeError, 'Direct dependency/build lock mismatch'):
+            self.run_evidence()
+
     def test_npm_installed_version_drift_blocks_evidence(self):
         path = self.root / 'desktop-ui/web/node_modules/example'
         path.mkdir(parents=True)

@@ -3,10 +3,15 @@
   "version": "0.1.0-beta",
   "platform": "win11-x64",
   "intended_license": "MIT",
-  "license_effective": false,
+  "license_effective": true,
   "copyright_year": 2026,
-  "copyright_holder": null,
+  "copyright_holder": "WYL",
   "source_ready": false,
   "binary_ready": false,
-  "release_approved": false
+  "release_approved": false,
+  "license": "MIT",
+  "copyright_basis": "Owner explicitly supplied WYL in round-seven conversation; not inferred from Git identity",
+  "source_blockers": [
+    "Reference-derived protocol/source boundary review pending"
+  ]
 }

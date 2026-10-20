@@ -1,6 +1,6 @@
 # 第七轮许可审查状态（2026-10-20）
 
-主项目已选择 MIT，准确版权署名待确认，正式 LICENSE 未生效。SOURCE_READY=false，BINARY_READY=false。以下是审查输入，不是法律合规认证。
+主项目正式 MIT 已完成，准确署名为所有者提供的 2026 WYL；整仓协议来源边界仍待审。SOURCE_READY=false，BINARY_READY=false。以下是审查输入，不是法律合规认证。
 
 - pystray 保留方案 A；完整固定版本源码、GPL/LGPL 文本及 13 个 Python 文件逐字节匹配证据已收集，拟走重组方案，见 LGPL-PYSTRAY.md。两个 PYZ 都含库，不能声称相邻文件可替换；应用材料授权和最终法律审查未完成。
 - proxy_tools 0.1.0 原始 sdist 无许可证。安装源码与固定上游 commit 相等；取得的 LICENSE.txt 是 BSD 风格且尾文异常，与 metadata 的 MIT 冲突。原样保留，不补造权利人、不直接标 MIT 或 SPDX BSD；需上游/所有者澄清。
@@ -10,9 +10,9 @@
 - Tcl/Tk PE 版本为 8.6.15，取各自固定版本 license.terms；候选内已有的数据许可也另行复制。Python 本地安装逐字节原生映射用于证明来源，非完整 native 法律结论。
 - WebView2 Core/WinForms/三个架构 Loader 的 PE 为 1.0.3856.49，取得相同版本官方 NuGet LICENSE/NOTICE，并逐个哈希对照（见 upstream/index.json）。SDK 条款不是 MIT，Runtime 安装器不随包携带，分发条件仍须审查。
 
-候选 license-review.json 为每个 SBOM 组件（包括未安装 npm 平台可选项）列版本、是否进入候选/证据范围、经核实才填写的 SPDX、官方来源、文本位置、版权义务、源码/替换/重链接需求、审查状态和风险。THIRD-PARTY-LICENSES.md 为人可读等价表。未知保留 null 或明确待审，不隐藏组件；SBOM 本身含构建环境超集、缺完整依赖关系图/静态子组件。
+候选 license-review.json 为每个 SBOM 组件（包括未安装 npm 平台可选项）列版本、是否进入候选/证据范围、经核实才填写的 SPDX、官方来源、文本位置、版权义务、源码/替换/重链接需求、审查状态和风险。THIRD-PARTY-LICENSES.md 为人可读等价表。三个已安装 npm 平台构建包没有自带文本（@esbuild/win32-x64、@rollup/rollup-win32-x64-gnu、@rollup/rollup-win32-x64-msvc），只用于构建且不复制二进制进候选；其缺项与未安装平台项分开记录。未知保留 null 或明确待审，不隐藏组件；SBOM 本身含构建环境超集、缺完整依赖关系图/静态子组件。
 
-来源固定在 desktop-ui/licenses/upstream/index.json（SHA256）。原始下载包在本机 output/upstream-review，未提交运行日志、配置或原生二进制。候选许可证收集器完全离线，只读取已核对的来源材料。
+来源固定在 desktop-ui/licenses/upstream/index.json（SHA256）。另外，本机构建 TOC 显示 44 个 Windows API/UCRT 文件来自项目/Python 安装之外的无关工具链搜索路径；未核实其再分发来源。保留组件与哈希，license-review.json 记录匹配及脱敏来源类别，不输出私人绝对路径。原始下载包在本机 output/upstream-review，未提交运行日志、配置或原生二进制。候选许可证收集器完全离线，只读取已核对的来源材料。
 
 
 ## 历史审查背景（第六轮，状态已由上述更新）

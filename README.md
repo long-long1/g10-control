@@ -40,7 +40,7 @@ VB-CABLE 的命名容易混淆：桥接向播放端 **CABLE Input** 写声音，
 
 ## 环境与依赖
 
-v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便携版运行不需要 Python/Node；开发构建仍需要下列环境。参见[中文便携说明](docs/README-PORTABLE.zh-CN.md)、[本轮版本说明](docs/RELEASE-NOTES.zh-CN.md)和[干净 Windows 验收步骤](docs/ACCEPTANCE-WIN11-X64.md)。MIT 已选定，但版权署名待确认；第三方再分发材料和干净机/硬件验收仍有阻塞。
+v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便携版运行不需要 Python/Node；开发构建仍需要下列环境。参见[中文便携说明](docs/README-PORTABLE.zh-CN.md)、[本轮版本说明](docs/RELEASE-NOTES.zh-CN.md)和[干净 Windows 验收步骤](docs/ACCEPTANCE-WIN11-X64.md)。MIT 已正式落地（2026 WYL），但来源边界、第三方再分发材料和干净机/硬件验收仍有阻塞。
 
 - Windows 11 x64，具备可用的 BLE 蓝牙适配器。
 - Python 3.12 x64；本机开发依赖版本见 `requirements.txt`。
@@ -163,7 +163,7 @@ npm run build
 
 功能和 ATVV 行为参考 [AxonKey](https://github.com/leowzz/axonkey)，分析版本 `a8c23b98fc6468013c9647a8b27646e5a9821303`。未包含参考仓库、商品照片、第三方程序二进制或反汇编转储。
 
-所有者已选择 MIT，计划用于有权授权的原创代码、文档及 SVG；版权署名待确认，正式 LICENSE 尚未完成。标准文本见 [MIT 草稿](docs/LICENSE-MIT-DRAFT.txt)，当前不构成生效授权。第三方内容仍遵循其原许可证。详见 [许可状态](LICENSE_STATUS.md) 与 [第三方说明](desktop-ui/THIRD-PARTY-NOTICES.md)。
+项目原创内容采用 [MIT](LICENSE)，Copyright (c) 2026 WYL，署名由所有者明确提供。仅覆盖有权授权的原创内容；第三方及待核来源范围见 [许可范围](LICENSE_SCOPE.md) 和 [来源审查](docs/SOURCE-PROVENANCE.md)。第三方内容保留各自许可证。详见 [许可状态](LICENSE_STATUS.md) 与 [第三方说明](desktop-ui/THIRD-PARTY-NOTICES.md)。
 
 ## 界面展示
 

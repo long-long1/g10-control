@@ -1,10 +1,12 @@
 """Evidence-only license review. No network, device access or license guessing."""
 import hashlib
+import ast
 from importlib import metadata
 import json
 from pathlib import Path
 import shutil
 import sys
+import tarfile
 
 
 def digest(path):
@@ -32,6 +34,14 @@ def supplement(root, target, inventory):
         raise RuntimeError('pystray source archive hash mismatch')
     if not proof['files'] or not all(f['equal'] for f in proof['files']):
         raise RuntimeError('pystray source correspondence not verified')
+    library = metadata.distribution('pystray')
+    with tarfile.open(target / 'licenses/sources/pystray-0.19.5.tar.gz') as archive:
+        members = {m.name.split('/', 1)[-1]: m for m in archive.getmembers() if m.isfile()}
+        for entry in proof['files']:
+            relative = entry['path']
+            installed = Path(library.locate_file(relative.removeprefix('lib/')))
+            if installed.read_bytes() != archive.extractfile(members[relative]).read():
+                raise RuntimeError('Installed pystray differs from corresponding source: ' + relative)
     (target / 'licenses/upstream/index.json').write_text(json.dumps(index, indent=2) + '\n', encoding='utf-8')
     # Preserve installed package data notices (Tcl/Tk license.terms etc.), too.
     for file in (target / '_internal').rglob('*'):
@@ -48,6 +58,15 @@ def write_review(root, target, inventory):
     python = {r['name'].lower(): r for r in inventory['python']}
     npm = {(r['name'], r['version']): r for r in inventory['npm']}
     binary_sources = {}
+    collected_sources = {}
+    toc = root / 'build/portable_onedir/COLLECT-00.toc'
+    if toc.is_file():
+        # Read PyInstaller data, never execute it. Retain hashes/categories only.
+        for block in ast.literal_eval(toc.read_text(encoding='utf-8')):
+            if isinstance(block, list):
+                for name, source, kind in block:
+                    if kind in {'BINARY', 'EXTENSION'}:
+                        collected_sources['_internal/' + name.replace('\\', '/')] = Path(source)
     for dist in metadata.distributions():
         for relative in dist.files or []:
             if Path(relative).suffix.lower() in {'.dll', '.pyd', '.exe'}:
@@ -90,11 +109,25 @@ def write_review(root, target, inventory):
             row['official_sources'] = [f'https://registry.npmjs.org/{c["name"]}/{c["version"]}']
             row['license_texts'] = item['collected_files'] if item else []
             row['declared_license'] = c.get('licenses', [])
-            row['status'] = 'text-collected-review-pending' if row['license_texts'] else 'uninstalled-tooling-text-not-collected'
+            row['status'] = ('text-collected-review-pending' if row['license_texts'] else
+                             'installed-license-text-missing' if item else 'uninstalled-tooling-text-not-collected')
             row['risks'].append('Lock declaration is not independent legal verification; installed=' + props['g10:installed'])
         else:
             file = target / c['name']
             row.update(bundled=True, sha256=digest(file), origin_matches=[])
+            collected = collected_sources.get(c['name'])
+            if collected and collected.is_file() and digest(collected) == row['sha256']:
+                row['collection_source_hash_matched'] = True
+                try:
+                    collected.resolve().relative_to(Path(sys.base_prefix).resolve())
+                    row['collection_source_category'] = 'CPython installation'
+                except ValueError:
+                    try:
+                        collected.resolve().relative_to(root.resolve())
+                        row['collection_source_category'] = 'project build environment'
+                    except ValueError:
+                        row['collection_source_category'] = 'external host/toolchain search path; provenance review required'
+                        row['risks'].append('PyInstaller resolved this file outside the project/Python installation; exact byte match is not redistribution permission. Raw local TOC retained outside release.')
             for name, version, source in binary_sources.get(file.name.lower(), []):
                 if digest(source) == row['sha256']:
                     row['origin_matches'].append({'distribution': name, 'version': version})
@@ -127,6 +160,10 @@ def write_review(root, target, inventory):
                     row['license_texts'].append('licenses/upstream/' + Path(extra['path']).name)
                     row['official_sources'].append(extra['source'])
                     row['risks'].append(extra['risk'])
+                    if c['name'] in extra.get('matching_binaries', []):
+                        row['origin_matches'].append({'distribution': 'Microsoft.Web.WebView2 NuGet',
+                                                     'version': '1.0.3856.49',
+                                                     'archive_sha256': extra['archive_sha256']})
             row['status'] = 'origin-matched-native-terms-pending' if row['origin_matches'] else 'unresolved-native-origin'
             row['risks'].append('Container origin is not complete static dependency attribution; SDK/compiler/runtime notices and rights pending')
         row['license_texts'] = sorted(set(row['license_texts']))

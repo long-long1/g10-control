@@ -43,6 +43,17 @@ def check_source(root):
             hits.append(name)
     if hits:
         raise ValueError('Source privacy scan failed (values suppressed): ' + ', '.join(sorted(set(hits))))
+    release = read(root / 'release-metadata.json')
+    package = read(root / 'desktop-ui/web/package.json')
+    lock = read(root / 'desktop-ui/web/package-lock.json')
+    version = release['version']
+    if package['version'] != version or lock['version'] != version or lock['packages']['']['version'] != version:
+        raise ValueError('Frontend/release metadata version mismatch')
+    for relative in ('desktop-ui/app_runtime.py', 'desktop-ui/web/src/App.tsx', 'build/release_evidence.py'):
+        if repr(version) not in (root / relative).read_text(encoding='utf-8'):
+            raise ValueError('Runtime/SBOM version mismatch: ' + relative)
+    if not release['license_effective'] and (root / 'LICENSE').exists():
+        raise ValueError('Root LICENSE must agree with the confirmed grant state')
     return {'source_files_scanned': len(set(names) - {''}), 'known_private_values_found': False}
 
 

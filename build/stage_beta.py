@@ -28,7 +28,8 @@ ROOT_ALLOWED = {'G10-Control.exe', 'G10-AudioBridge.exe', '_internal', 'portable
                 'README-PORTABLE.zh-CN.md', 'ACCEPTANCE-WIN11-X64.md', 'BETA-LICENSE-REVIEW.md',
                 'LICENSE_STATUS.md', 'THIRD-PARTY-NOTICES.md', 'license-inventory.json', 'package-audit.json', 'manifest.json',
                 'sbom.cdx.json', 'build-evidence.json', 'accept_win11.ps1', 'RELEASE-NOTES.zh-CN.md', 'THIRD-PARTY-LICENSES.md',
-                'LICENSE', 'LICENSE-MIT-DRAFT.txt', 'release-metadata.json', 'LGPL-PYSTRAY.md', 'RELEASE-PROCESS.md', 'license-review.json'}
+                'LICENSE', 'LICENSE-MIT-DRAFT.txt', 'LICENSE_SCOPE.md', 'SOURCE-PROVENANCE.md',
+                'release-metadata.json', 'LGPL-PYSTRAY.md', 'RELEASE-PROCESS.md', 'license-review.json'}
 
 
 def audit_files(directory, identities=None):
@@ -193,7 +194,8 @@ def main():
                  'desktop-ui/THIRD-PARTY-NOTICES.md': 'THIRD-PARTY-NOTICES.md'}
     documents.update({'build/accept_win11.ps1': 'accept_win11.ps1', 'docs/RELEASE-NOTES.zh-CN.md': 'RELEASE-NOTES.zh-CN.md',
                       'release-metadata.json': 'release-metadata.json', 'docs/LGPL-PYSTRAY.md': 'LGPL-PYSTRAY.md',
-                      'docs/RELEASE-PROCESS.md': 'RELEASE-PROCESS.md'})
+                      'docs/RELEASE-PROCESS.md': 'RELEASE-PROCESS.md', 'LICENSE_SCOPE.md': 'LICENSE_SCOPE.md',
+                      'docs/SOURCE-PROVENANCE.md': 'SOURCE-PROVENANCE.md'})
     if (root / 'LICENSE').is_file():
         documents['LICENSE'] = 'LICENSE'
     else:
