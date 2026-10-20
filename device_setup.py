@@ -1,7 +1,6 @@
 """Explicit BLE discovery and capability-only checking using the existing transport."""
 import asyncio
 from datetime import datetime, timedelta, timezone
-import re
 import json
 from pathlib import Path
 import queue
@@ -9,7 +8,7 @@ import threading
 from types import SimpleNamespace
 
 from atvv_protocol import SERVICE, TX, AUDIO, CONTROL, CAPABILITIES, capabilities
-from local_config import normalize_address, config_path, address as active_address
+from local_config import normalize_address, peer_address_from_windows_id, config_path, address as active_address
 from phase2_handshake import Controller
 
 PROFILE = 'atvv-g10-128-v1'
@@ -19,14 +18,7 @@ AEP_IS_PRESENT = 'System.Devices.Aep.IsPresent'
 
 
 def _address_from_device_id(device_id):
-    """Fallback for Windows IDs that embed the peer Bluetooth address."""
-    match = re.search(r'(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}', str(device_id or ''))
-    if not match:
-        return ''
-    try:
-        return normalize_address(match.group(0))
-    except ValueError:
-        return ''
+    return peer_address_from_windows_id(device_id)
 
 
 async def enumerate_paired_devices():

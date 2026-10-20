@@ -37,6 +37,19 @@ def normalize_address(value):
     return value
 
 
+def peer_address_from_windows_id(device_id):
+    """Decode the peer in a WinRT BLE interface ID, never the local radio.
+
+    BluetoothLE#BluetoothLE<local MAC>-<peer MAC> is an interface ID,
+    not a MAC address. Unknown/PnP/AEP ID formats must use address properties
+    instead of guessing which embedded hex string identifies the peer.
+    """
+    mac = r'(?:[0-9a-f]{2}:){5}[0-9a-f]{2}'
+    match = re.fullmatch(rf'BluetoothLE#BluetoothLE{mac}-({mac})',
+                         str(device_id or ''), re.IGNORECASE)
+    return normalize_address(match.group(1)) if match else ''
+
+
 def address():return normalize_address(_value('bluetooth_address','G10_BLUETOOTH_ADDRESS'))
 
 

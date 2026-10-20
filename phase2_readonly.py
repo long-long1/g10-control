@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import queue
-import re
 import subprocess
 import sys
 import threading
@@ -17,17 +16,14 @@ import uuid
 import winsound
 
 from atvv_protocol import AUDIO, CONTROL, SERVICE, capabilities, command_plan
-from local_config import normalize_address
+from local_config import normalize_address, peer_address_from_windows_id
 
 ROOT=Path(__file__).resolve().parent
 AEP_DEVICE_ADDRESS='System.Devices.Aep.DeviceAddress'
 
 
 def _address_from_windows_id(device_id):
-    match=re.search(r'(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}',str(device_id or ''))
-    if not match:return ''
-    try:return normalize_address(match.group(0))
-    except ValueError:return ''
+    return peer_address_from_windows_id(device_id)
 
 
 def resolve_paired_device(devices, address, device_id=''):
