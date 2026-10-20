@@ -57,7 +57,7 @@ v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便�
 git clone https://github.com/long-long1/g10-control.git
 cd g10-control
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.lock.txt
 cd desktop-ui\web
 npm ci
 npm run build

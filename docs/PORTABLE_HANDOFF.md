@@ -1,6 +1,6 @@
 # G10 Control Portable 版本开发交接
 
-> 最新阶段：第 14 节（2026-10-20 离线恢复及发行准备），第 13 节为上一轮已验证背景。Windows 11 x64 v0.1.0 Beta 本地候选功能轮（2026-10-20），见第 13 节。第 1–12 节保留历史审查和各轮基线，其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。本轮一次真实 VB-CABLE 合成验证通过；真实 BLE 及干净电脑验收仍待完成，候选目录尚不能对外分发。
+> 最新阶段：第 15 节（2026-10-20 MIT 开源授权与发行合规准备），第 14 节为离线恢复及发行准备背景；第 13 节为上一轮已验证背景。Windows 11 x64 v0.1.0 Beta 本地候选功能轮（2026-10-20），见第 13 节。第 1–12 节保留历史审查和各轮基线，其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。本轮一次真实 VB-CABLE 合成验证通过；真实 BLE 及干净电脑验收仍待完成，候选目录尚不能对外分发。
 
 ## 1. 仓库状态
 
@@ -477,3 +477,90 @@ SBOM 共 **273 组件**：34 Python distribution、122 npm lock 项（72 实际�
 5. 手动开启豆包语音输入的限制保留；自动唤起未通过、冻结按键观察器不可用。异常不自动重连、不强杀桥接。诊断可能含设备身份和本机路径，分享前须检查。
 
 保护性核对：相对开工 9623cc9，`atvv_protocol.py`、`phase2_handshake.py`、`phase2_readonly.py`、`analyze_audio.py`、`g10_audio_bridge.py`、`virtual_audio_probe.py` 均无改动。真实路由/配置/日志/录音全部留在被忽略的本机位置，不进入本轮提交或候选。
+
+
+## 15. MIT 开源授权与发行合规准备（2026-10-20）
+
+### 授权与来源结论
+
+开工 HEAD 为 82b8fe8，工作树干净。本轮仅本地开发、提交、离线测试及构建；没有 git push、Release、公开上传或 ZIP。没有 BLE 扫描/连接/GATT、真实麦克风会话、音频流、默认设备修改、驱动安装/卸载、系统配置修改、键鼠输入模拟或提权。
+
+所有者先明确选择 MIT，随后在本轮对话直接答复版权署名 **WYL**。根 LICENSE 已正式完成，版权行为 **Copyright (c) 2026 WYL**，按词与 SPDX 固定版本 MIT 标准文本比对，仅替换版权占位，法律条款未改写。署名依据是用户直接确认，没有用 GitHub/Git 作者身份推断法律权利人。初始待确认草稿已转为正式 LICENSE；README、npm package/lock 和 release-metadata 同步引用 MIT。根标准文本满足本地识别前提；没有推送，因此未验证 GitHub 远端许可证标签。
+
+MIT 仅覆盖有权授权的原创代码、测试、文档和 SVG，不覆盖第三方。LICENSE_SCOPE.md 与 docs/SOURCE-PROVENANCE.md 记录例外：pystray 源归档仍为 LGPL；第三方依赖和 notices 保持各自条款。atvv_protocol.py 的 source-derived、phase2_handshake.py 的 RC003-derived 及协议文档参考边界仍需核实，不能凭跨语言改写、功能参考或主项目 MIT 自动认定权利齐全。未发现拷入外部参考仓库/商品照片/字体文件；SVG 为几何和文本示意图。8d170a3 已消除解码器对外部 checkout 的读取，但这不代替完整历史来源审查。因此 **SOURCE_READY=false**（整仓来源边界待审），不否认原创部分的正式 MIT 授权。
+
+### pystray 与第三方材料
+
+选择 **A：保留 pystray 0.19.5**，没有改写托盘或切换 UI 栈。docs/LGPL-PYSTRAY.md 比较保留、宽松依赖和有限 Win32 自实现；后两者需重新验证桌面/生命周期且有维护成本，本轮不引入。库头为 LGPL-3.0-or-later，Copyright (C) 2016–2022 Moses Palmér。固定标签完整源码归档、原始 GPL/LGPL 文本已收集；13 个安装 Python 文件与归档逐字节相同，stage 每次重新核对。两个 EXE 均含 pystray PYZ，不声称相邻 .py 可替换或已满足 LGPL 4(d)(1)；拟采用 4(d)(0) 对应源码/应用材料重组路径。
+
+**修改库重组实验成功**：使用归档的隔离副本，仅向 lib/pystray/__init__.py 添加无业务标记及诊断退出探针，保留全部版权/许可；以 -PystraySource 显式参数 clean 构建到 dist/mit-recombined/G10-Control。两个 PYZ 均含修改标记而正式候选均无标记；两个重组 EXE 非业务诊断 **2/2** 退出 0、ok=true、business_started=false；主程序的退出探针证明修改后的 pystray 已实际运行。与正式候选相比仅两个 EXE 改变，其余 1,084 payload 文件相同，安装环境的 pystray 未修改。证据：output/mit-recombined-build.log、mit-recombination-result.json、mit-recombination-source-change.json、mit-recombined-diff.json 及 mit-recombined-diagnostic/；临时验证脚本 output/mit_verify_recombined.py 可供本机复核。正式候选保持未修改上游库。完整对应应用源码交付、来源授权、运行时适用告知、GPLv3 源码提供方式/Installation Information 适用性和最终法律审查仍待完成；技术实验成功也不能独立构成 LGPL 合规证明。
+
+补充固定来源文本与 SHA256 位于 desktop-ui/licenses/upstream/index.json，打包为 licenses/upstream；来源字节保留原换行/空白，Git attributes 不进行文本归一化。没有为第三方重写许可证或版权：
+
+- proxy_tools 0.1.0：wheel/sdist 无全文，安装源码与固定上游 commit 相同；取得上游 BSD 风格 LICENSE，但与 MIT metadata 冲突且尾文异常。保留原文、SPDX 不猜测，仍需澄清。
+- 九个 winrt-* 3.2.1：取得固定发布 commit MIT 原文；逐个记录源码包 SHA256 及部分文件比较。没有把部分匹配说成全源一致，C++/WinRT/SDK/MSVC native 条款仍待审。
+- PortAudio：已安装构建配方指向 v19.7.0，收集对应 MIT 文本；保留既有 x64 非 ASIO DLL，精确编译产物/SDK/运行库链待审。
+- WebView2 1.0.3856.49：相同版本官方 NuGet LICENSE/NOTICE 已收集，Core、WinForms 和三个架构 Loader 共五个 DLL 与 NuGet 文件逐字节相等；不把这些材料改标主项目 MIT，完整条款/静态组件审查仍待完成。
+- Python 3.12.10、Tcl/Tk 8.6.15、Pillow 13.0.0、NumPy 2.5.4：保留发行包自带完整文本/许可栈，另取 Tcl/Tk 固定版本文本；实际 native 来源按字节映射。声明和容器来源不能代替内部静态依赖的权利审查。
+- 44 个 API/UCRT 文件在实际 PyInstaller TOC 中来自项目/Python 安装之外的无关构建机工具链搜索目录。没有删除文件/扫描项以缩小数量；报告只写 SHA256 匹配和脱敏来源类别，原始绝对路径留在本机忽略的 TOC。来源及再分发条款未核实，构成二进制阻塞。
+
+最终 SBOM 仍为 **273 个组件：34 Python distribution、122 npm lock 项、117 原生文件**，其中 72 npm 包实际安装。34 个 Python distribution 均收集到许可全文（不等于冲突解决）。三个已安装构建平台包仍缺自带文本：@esbuild/win32-x64、@rollup/rollup-win32-x64-gnu、@rollup/rollup-win32-x64-msvc；未复制它们的构建二进制进候选。50 个未安装 lock 平台替代项同样保留在 SBOM/报告，未伪标为运行时许可已通过。
+
+license-review.json 与 THIRD-PARTY-LICENSES.md 为全部 273 项提供版本、包内证据/范围、核实才填写的 SPDX、官方来源、文本位置、版权/源码/重链接需求、状态和风险。状态分布：23 一般待审、1 proxy 冲突、1 LGPL 重组待审、9 WinRT native 待审、69 npm 文本已收集待审、3 已安装构建包缺文本、50 未安装工具项未收集全文、73 native 容器来源匹配待审、44 native 来源未解决。**法律审查尚未完成，redistribution_ready=false。**
+
+### 开源协作、CI 与发行流程
+
+新增 CONTRIBUTING、CODE_OF_CONDUCT、SECURITY、CHANGELOG、Issue 模板和 PR 模板。README 补充界面展示位置（暂无确认可公开截图）、Portable/首次使用、限制、排障、隐私和贡献入口，没有捏造兼容设备或功能。贡献指南禁止公开设备身份、完整日志/录音；硬件 PR 必须报告型号/协议及实测结果。未编造安全邮箱；私密漏洞报告功能/渠道仍待所有者配置验证。
+
+.github/workflows/ci.yml 固定 Windows 2022、Python 3.12.10、Node 26.1.0、npm 11.13.0，三个 actions 固定 commit SHA，Token 仅 contents:read，checkout 不保留凭据。运行全部离线 Python/前端测试、TypeScript/Vite、clean onedir、stage、manifest/SHA256、SBOM 官方 schema、许可文本及 privacy 检查。schema 下载由 build/schema-lock.json 固定哈希；jsonschema 4.26.0 在隔离环境安装，不污染构建锁。没有 secrets、artifact 上传、Release 或发布动作。托管 Runner 的实际桌面/WebView2/硬件验收保留为本地任务，不伪标 CI 验收通过。
+
+本地 YAML/模板解析、action SHA 长度/只读权限/无发布断言和 PowerShell 语法检查通过，证据 output/mit-workflow-local-check.json；**GitHub 托管执行未运行**（禁止推送）。本地等效测试与构建结果如下，不能冒充远端 CI 结果。
+
+发行流程 docs/RELEASE-PROCESS.md、中文使用说明、验收清单和 Release Notes 草稿同步更新。release-metadata.json 为 0.1.0-beta，前端/运行时/SBOM 一致；license_effective=true，source_ready=false、binary_ready=false、release_approved=false。源码公开与二进制发布分别审批。没有准备任何可执行的自动发布动作。
+
+### 最终本机验证与候选
+
+| 检查 | 实际结果 | 本机证据（忽略、不提交） |
+| --- | --- | --- |
+| 根目录全部 Python | **104/104**，无失败/错误/跳过 | output/mit-final-root-tests.log |
+| desktop-ui 全部 Python | **45/45**，无失败/错误/跳过 | output/mit-final-desktop-tests.log |
+| 前端全部自动化 | **12/12**，无失败/跳过 | output/mit-final-frontend-tests.log |
+| TypeScript / Vite | 成功 | output/mit-final-build.log |
+| PyInstaller clean onedir | 两次最终构建均成功，6.22.3 | output/mit-final-build.log、mit-final-repeat-build.log |
+| 受控重复构建 | **1,086/1,086 payload 文件 SHA256 相同**，无新增/删除/差异 | output/mit-final-reproducibility.json |
+| LGPL 修改库重组 | **两个 PYZ 标记、2/2 诊断及主程序真实导入修改版通过**；仅两个 EXE 改变 | output/mit-recombination-result.json、mit-recombined-diff.json |
+| EXE 非业务诊断 | **4/4**，两个 EXE 的 portable/回退均退出 0、ok=true、business_started=false | output/mit-final-exe.log、mit-final-exe-acceptance/ |
+| Manifest / SHA256 / SBOM 映射 | **1,292 文件**，manifest **1,291 条**（不含自身）全部一致，117 native 精确对应 | output/mit-final-schema-integrity.log |
+| CycloneDX 官方 1.6 Schema | 通过，仅结构验证；校验器有 RefResolver 弃用警告，不影响本轮固定版本结果 | 同上、output/mit-sbom-schema/ |
+| 许可/隐私 | 许可文本哈希、34 Python/完整构建锁及 npm 版本核对通过；20 个已知身份/开发路径模式无命中，data 空，两个 EXE 各 880 PYZ 模块，无自身测试模块 | 候选 package-audit.json、license-inventory.json、build-evidence.json |
+
+最终目录：`dist/G10-Control-v0.1.0-Beta-MIT-win64`，忽略、不提交、不生成 ZIP。此前 mit-review 是署名确认前的排查样本，不能当最终候选。冻结输入基于 **908b6be**，stage 记录实际逐文件源码/材料哈希；最后的交接/README 文档提交不改冻结业务源码。重复构建仅本机、同一工具链/源时间控制，未证明跨机器可重现，也未完成 wheel 内容哈希供应链锁。
+
+```text
+G10-Control.exe      c736cfeb852a23fcb4b179517a079e1727ef609551dae466279c45842617fce5
+G10-AudioBridge.exe  adbafeabaf59c56bd6b6e1725e3ecc68cb7f022dd36fe16fc83ac81cd1d06618
+manifest.json        c668bfe4be900a5ac7b75676402e358ecef4cc594741552c4061ddcd32c244f2
+sbom.cdx.json        3fb41b4c4e0cf3c841905fbda54c8dea2c5efd5620407b17cb4de276ba8a8ea2
+```
+
+### 本轮本地提交
+
+| 工作 | Commit |
+| --- | --- |
+| MIT 选择、待署名草稿与元数据 | 5fe6dee |
+| 社区协作规范 | 85cc829 |
+| 上游许可、来源证据与 LGPL 库源码 | 9970f35 |
+| Windows 离线 CI、完整性检查与发行门槛 | bc66b58 |
+| 用户确认 WYL 后正式 MIT、来源阻塞和报告强化 | 908b6be |
+| 最终重组证据与第 15 节交接 | 随最终文档提交；确切 ID 见 git log 与本轮最终报告 |
+
+### 尚存发行阻塞与独立结论
+
+1. SOURCE_READY=false：正式 MIT 已完成，但带来源派生标记的协议代码/文档边界未核清。需要确认独立原创或取得必要授权，不能由本轮擅自重新授权。
+2. BINARY_READY=false：proxy_tools 冲突、LGPL 完整对应应用/库材料及适用分发条件、原生许可链（特别是 44 个构建搜索路径来源文件）尚未审查完成；构建工具缺文本也保持记录。
+3. 干净 Windows 11 x64 尚未验收。本机隔离路径与文件阻塞回退不能代替无开发环境、真实只读 ACL 或真实缺依赖测试。
+4. 本轮未授权/执行实际 G10 BLE/ATVV 能力、语音端到端、长按/松开/断连/异常退出验收。历史成功和模拟测试不能代替新候选实机证据。
+5. 无私人配置/地址/音频/开发路径的机械检查通过，仍需发行前人工复核精确候选；所有者尚未批准源码公开或二进制对外发布。
+6. 自动豆包唤起未验证成功、冻结按键观察器不可用；不自动装驱动、不改系统默认设备。这些限制保留。
+
+保护性 diff：相对 82b8fe8，atvv_protocol.py、phase2_handshake.py、phase2_readonly.py、analyze_audio.py、g10_audio_bridge.py、virtual_audio_probe.py、audio_route.py、audio_idle.py 全部未改动。
