@@ -1,0 +1,24 @@
+name: 问题报告
+description: 提交脱敏的功能或构建问题
+body:
+  - type: markdown
+    attributes:
+      value: 请先阅读 SECURITY.md。不要上传地址、设备身份、录音、路由证明或完整日志。漏洞细节不要公开提交。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与最小复现
+      description: 描述触发方式、预期和实际行为。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与测试环境
+      description: 提交号、Windows 版本；硬件相关问题写型号和协议，勿写设备身份。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏证据与未验证事项

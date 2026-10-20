@@ -1,0 +1,10 @@
+name: 功能建议
+description: 描述使用场景与预期行为
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 场景、预期行为与验证方法
+      description: 不要包含设备身份或私人数据。
+    validations:
+      required: true
