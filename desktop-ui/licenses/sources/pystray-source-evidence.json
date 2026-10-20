@@ -1,0 +1,58 @@
+{
+  "source": "https://codeload.github.com/moses-palmer/pystray/tar.gz/refs/tags/v0.19.5",
+  "sha256": "2ab6bd15c14b400c9e8271a82c9de8adc0f1a0cacfc14080bdd4fb42bb88ec92",
+  "files": [
+    {
+      "path": "lib/pystray/_appindicator.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_base.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_darwin.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_dummy.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_gtk.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_info.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_win32.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_xorg.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/__init__.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_util/gtk.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_util/notify_dbus.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_util/win32.py",
+      "equal": true
+    },
+    {
+      "path": "lib/pystray/_util/__init__.py",
+      "equal": true
+    }
+  ]
+}

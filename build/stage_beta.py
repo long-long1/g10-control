@@ -15,8 +15,10 @@ import sys
 import zipfile
 try:
     from .release_evidence import write_evidence
+    from .license_review import supplement, write_review
 except ImportError:
     from release_evidence import write_evidence
+    from license_review import supplement, write_review
 
 FORBIDDEN_PARTS = {'.git', '.venv', 'node_modules', 'output', '__pycache__'}
 FORBIDDEN_NAMES = {'local-settings.json', 'settings.json', 'route-proof.json', 'setup-progress.json',
@@ -25,7 +27,8 @@ FORBIDDEN_SUFFIXES = {'.log', '.jsonl', '.wav', '.pcm', '.adpcm', '.dmp', '.mp3'
 ROOT_ALLOWED = {'G10-Control.exe', 'G10-AudioBridge.exe', '_internal', 'portable.marker', 'data', 'licenses',
                 'README-PORTABLE.zh-CN.md', 'ACCEPTANCE-WIN11-X64.md', 'BETA-LICENSE-REVIEW.md',
                 'LICENSE_STATUS.md', 'THIRD-PARTY-NOTICES.md', 'license-inventory.json', 'package-audit.json', 'manifest.json',
-                'sbom.cdx.json', 'build-evidence.json', 'accept_win11.ps1', 'RELEASE-NOTES.zh-CN.md', 'THIRD-PARTY-LICENSES.md'}
+                'sbom.cdx.json', 'build-evidence.json', 'accept_win11.ps1', 'RELEASE-NOTES.zh-CN.md', 'THIRD-PARTY-LICENSES.md',
+                'LICENSE', 'LICENSE-MIT-DRAFT.txt', 'release-metadata.json', 'LGPL-PYSTRAY.md', 'RELEASE-PROCESS.md', 'license-review.json'}
 
 
 def audit_files(directory, identities=None):
@@ -188,7 +191,13 @@ def main():
                  'docs/BETA_LICENSE_REVIEW.md': 'BETA-LICENSE-REVIEW.md',
                  'LICENSE_STATUS.md': 'LICENSE_STATUS.md',
                  'desktop-ui/THIRD-PARTY-NOTICES.md': 'THIRD-PARTY-NOTICES.md'}
-    documents.update({'build/accept_win11.ps1': 'accept_win11.ps1', 'docs/RELEASE-NOTES.zh-CN.md': 'RELEASE-NOTES.zh-CN.md'})
+    documents.update({'build/accept_win11.ps1': 'accept_win11.ps1', 'docs/RELEASE-NOTES.zh-CN.md': 'RELEASE-NOTES.zh-CN.md',
+                      'release-metadata.json': 'release-metadata.json', 'docs/LGPL-PYSTRAY.md': 'LGPL-PYSTRAY.md',
+                      'docs/RELEASE-PROCESS.md': 'RELEASE-PROCESS.md'})
+    if (root / 'LICENSE').is_file():
+        documents['LICENSE'] = 'LICENSE'
+    else:
+        documents['docs/LICENSE-MIT-DRAFT.txt'] = 'LICENSE-MIT-DRAFT.txt'
     for origin, name in documents.items():
         shutil.copy2(root / origin, target / name)
     status = target / 'LICENSE_STATUS.md'
@@ -197,8 +206,10 @@ def main():
     identities = private_identities(root)
     embedded, modules = embedded_audit(target, identities)
     inventory = collect_licenses(root, target, modules)
+    supplement(root, target, inventory)
     (target / 'license-inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding='utf-8')
     evidence_summary = write_evidence(root, target, inventory, modules)
+    write_review(root, target, inventory)
     audit = audit_files(target, identities)
     audit['unexpected_root_entries'] = sorted(path.name for path in target.iterdir() if path.name not in ROOT_ALLOWED)
     audit['embedded_code'] = embedded

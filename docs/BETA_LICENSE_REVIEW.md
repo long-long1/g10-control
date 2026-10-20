@@ -1,3 +1,22 @@
+# 第七轮许可审查状态（2026-10-20）
+
+主项目已选择 MIT，准确版权署名待确认，正式 LICENSE 未生效。SOURCE_READY=false，BINARY_READY=false。以下是审查输入，不是法律合规认证。
+
+- pystray 保留方案 A；完整固定版本源码、GPL/LGPL 文本及 13 个 Python 文件逐字节匹配证据已收集，拟走重组方案，见 LGPL-PYSTRAY.md。两个 PYZ 都含库，不能声称相邻文件可替换；应用材料授权和最终法律审查未完成。
+- proxy_tools 0.1.0 原始 sdist 无许可证。安装源码与固定上游 commit 相等；取得的 LICENSE.txt 是 BSD 风格且尾文异常，与 metadata 的 MIT 冲突。原样保留，不补造权利人、不直接标 MIT 或 SPDX BSD；需上游/所有者澄清。
+- 九个 winrt-* 3.2.1 的 wheel/sdist 无文本；取得 v3.2.1 固定 commit 的 MIT 文本，记录各自 sdist 哈希与比对。比对不覆盖所有文件，不能把共同上游文本当作 native SDK 完整许可；C++/WinRT、Windows SDK、MSVC 仍待审。
+- Python 3.12.10、Pillow 13.0.0、NumPy 2.5.4 的安装发行包已附完整文本栈，自动随候选复制。Pillow LICENSE 包含各编解码库 notices，NumPy 保留内部及 bundled libraries 文本；仍需核对实际静态组件和二进制来源。
+- PortAudio：已安装 sounddevice 的 portaudio-binaries 构建配方固定 v19.7.0，已取对应上游 MIT 文本；只保留原有 x64 非 ASIO DLL。DLL/配方与编译器/Windows API 附加条款的完整对应关系待审。
+- Tcl/Tk PE 版本为 8.6.15，取各自固定版本 license.terms；候选内已有的数据许可也另行复制。Python 本地安装逐字节原生映射用于证明来源，非完整 native 法律结论。
+- WebView2 Core/WinForms/三个架构 Loader 的 PE 为 1.0.3856.49，取得相同版本官方 NuGet LICENSE/NOTICE，并逐个哈希对照（见 upstream/index.json）。SDK 条款不是 MIT，Runtime 安装器不随包携带，分发条件仍须审查。
+
+候选 license-review.json 为每个 SBOM 组件（包括未安装 npm 平台可选项）列版本、是否进入候选/证据范围、经核实才填写的 SPDX、官方来源、文本位置、版权义务、源码/替换/重链接需求、审查状态和风险。THIRD-PARTY-LICENSES.md 为人可读等价表。未知保留 null 或明确待审，不隐藏组件；SBOM 本身含构建环境超集、缺完整依赖关系图/静态子组件。
+
+来源固定在 desktop-ui/licenses/upstream/index.json（SHA256）。原始下载包在本机 output/upstream-review，未提交运行日志、配置或原生二进制。候选许可证收集器完全离线，只读取已核对的来源材料。
+
+
+## 历史审查背景（第六轮，状态已由上述更新）
+
 # Beta 候选版许可与再分发审查
 
 状态：**只供本地验收，尚不能声明可对外分发。** 本文不是许可证，不替所有者授予第三方权利。不制作对外 ZIP，不上传二进制或建立 Release。

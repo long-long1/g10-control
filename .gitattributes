@@ -2,3 +2,7 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 *.svg text eol=lf
+
+# Preserve upstream evidence bytes, including original line endings/whitespace.
+desktop-ui/licenses/upstream/* -text whitespace=-blank-at-eol
+desktop-ui/licenses/sources/*.tar.gz -text -diff

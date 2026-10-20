@@ -1,0 +1,168 @@
+[
+  {
+    "path": "desktop-ui/licenses/upstream/proxy_tools-0.1.0-LICENSE.txt",
+    "sha256": "a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4",
+    "source": "https://raw.githubusercontent.com/jtushman/proxy_tools/db43f1e35d4f90a65c5a4d56d9e9af88212ec6e6/LICENSE.txt",
+    "components": [
+      "proxy_tools"
+    ],
+    "spdx": null,
+    "status": "conflict-review-required",
+    "risk": "PyPI MIT declaration conflicts with upstream BSD-style text; malformed disclaimer retained verbatim. Owner/upstream clarification needed.",
+    "evidence": {
+      "upstream_commit": "db43f1e35d4f90a65c5a4d56d9e9af88212ec6e6",
+      "installed_source_equal": true
+    }
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/PyWinRT-v3.2.1-LICENSE.txt",
+    "sha256": "6e898069e8b3c6d8d23dc70ac7067cc2b7c9db14c36df873026758db82c0891d",
+    "source": "https://raw.githubusercontent.com/pywinrt/pywinrt/21cbd0fd7ff91422ed76b4e3611d3fb52716e017/LICENSE",
+    "components": [
+      "winrt-runtime",
+      "winrt-Windows.Devices.Bluetooth",
+      "winrt-Windows.Devices.Bluetooth.Advertisement",
+      "winrt-Windows.Devices.Bluetooth.GenericAttributeProfile",
+      "winrt-Windows.Devices.Enumeration",
+      "winrt-Windows.Devices.Radios",
+      "winrt-Windows.Foundation",
+      "winrt-Windows.Foundation.Collections",
+      "winrt-Windows.Storage.Streams"
+    ],
+    "spdx": "MIT",
+    "status": "text-verified-native-review-pending",
+    "risk": "Package sources checked against release tree; generated C++/WinRT, Windows SDK and MSVC native obligations remain separate.",
+    "evidence": {
+      "upstream_commit": "21cbd0fd7ff91422ed76b4e3611d3fb52716e017",
+      "sdist_comparisons": {
+        "winrt-runtime": {
+          "sdist_sha256": "c8dca19e12b234ae6c3dadf1a4d0761b51e708457492c13beb666556958801ea",
+          "sdist_name": "winrt_runtime-3.2.1.tar.gz",
+          "compared_files": 19,
+          "matching_files": 18
+        },
+        "winrt-Windows.Devices.Bluetooth": {
+          "sdist_sha256": "db496d2d92742006d5a052468fc355bf7bb49e795341d695c374746113d74505",
+          "sdist_name": "winrt_windows_devices_bluetooth-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Devices.Bluetooth.Advertisement": {
+          "sdist_sha256": "0223852a7b7fa5c8dea3c6a93473bd783df4439b1ed938d9871f947933e574cc",
+          "sdist_name": "winrt_windows_devices_bluetooth_advertisement-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Devices.Bluetooth.GenericAttributeProfile": {
+          "sdist_sha256": "cdf6ddc375e9150d040aca67f5a17c41ceaf13a63f3668f96608bc1d045dde71",
+          "sdist_name": "winrt_windows_devices_bluetooth_genericattributeprofile-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Devices.Enumeration": {
+          "sdist_sha256": "df316899e39bfc0ffc1f3cb0f5ee54d04e1d167fbbcc1484d2d5121449a935cf",
+          "sdist_name": "winrt_windows_devices_enumeration-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Devices.Radios": {
+          "sdist_sha256": "4dc9b9d1501846049eb79428d64ec698d6476c27a357999b78a8331072e18a0b",
+          "sdist_name": "winrt_windows_devices_radios-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Foundation": {
+          "sdist_sha256": "ad2f1fcaa6c34672df45527d7c533731fdf65b67c4638c2b4aca949f6eec0656",
+          "sdist_name": "winrt_windows_foundation-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Foundation.Collections": {
+          "sdist_sha256": "0eff1ad0d8d763ad17e9e7bbd0c26a62b27215016393c05b09b046d6503ae6d5",
+          "sdist_name": "winrt_windows_foundation_collections-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        },
+        "winrt-Windows.Storage.Streams": {
+          "sdist_sha256": "476f522722751eb0b571bc7802d85a82a3cae8b1cce66061e6e758f525e7b80f",
+          "sdist_name": "winrt_windows_storage_streams-3.2.1.tar.gz",
+          "compared_files": 10,
+          "matching_files": 4
+        }
+      }
+    }
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/PortAudio-v19.7.0-LICENSE.txt",
+    "sha256": "ec52a1952d701f94e5135719a47376da4ee0b4a0201f1cafb49f61db6480ac3d",
+    "source": "https://raw.githubusercontent.com/PortAudio/portaudio/v19.7.0/LICENSE.txt",
+    "components": [
+      "PortAudio"
+    ],
+    "spdx": "MIT",
+    "status": "text-verified-binary-review-pending",
+    "risk": "Build recipe in installed sounddevice selects v19.7.0; exact compiled DLL and bundled host API/SDK notices still pending."
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/Tcl-8.6.15-license.terms",
+    "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+    "source": "https://raw.githubusercontent.com/tcltk/tcl/core-8-6-15/license.terms",
+    "components": [
+      "Tcl"
+    ],
+    "spdx": null,
+    "status": "text-verified-binary-review-pending",
+    "risk": "PE version 8.6.15; binary must match Python installation; inspect bundled script/additional notices."
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/Tk-8.6.15-license.terms",
+    "sha256": "2cde822b93ca16ae535c954b7dfe658b4ad10df2a193628d1b358f1765e8b198",
+    "source": "https://raw.githubusercontent.com/tcltk/tk/core-8-6-15/license.terms",
+    "components": [
+      "Tk"
+    ],
+    "spdx": null,
+    "status": "text-verified-binary-review-pending",
+    "risk": "PE version 8.6.15; binary provenance and complete included data license chain still pending."
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/WebView2-1.0.3856.49-LICENSE.txt",
+    "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+    "source": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3856.49/microsoft.web.webview2.1.0.3856.49.nupkg",
+    "archive_member": "LICENSE.txt",
+    "archive_sha256": "bc0f76eb911b569838dc4aa8f8d325269b966bedb592863d26211aef3a099f1a",
+    "components": [
+      "WebView2 SDK"
+    ],
+    "spdx": null,
+    "status": "text-and-binaries-matched-terms-review-pending",
+    "risk": "Microsoft SDK redistribution conditions and third-party notices require owner review; not MIT.",
+    "matching_binaries": [
+      "_internal/webview/lib/Microsoft.Web.WebView2.Core.dll",
+      "_internal/webview/lib/Microsoft.Web.WebView2.WinForms.dll",
+      "_internal/webview/lib/runtimes/win-arm64/native/WebView2Loader.dll",
+      "_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll",
+      "_internal/webview/lib/runtimes/win-x86/native/WebView2Loader.dll"
+    ]
+  },
+  {
+    "path": "desktop-ui/licenses/upstream/WebView2-1.0.3856.49-NOTICE.txt",
+    "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+    "source": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3856.49/microsoft.web.webview2.1.0.3856.49.nupkg",
+    "archive_member": "NOTICE.txt",
+    "archive_sha256": "bc0f76eb911b569838dc4aa8f8d325269b966bedb592863d26211aef3a099f1a",
+    "components": [
+      "WebView2 SDK"
+    ],
+    "spdx": null,
+    "status": "text-and-binaries-matched-terms-review-pending",
+    "risk": "Microsoft SDK redistribution conditions and third-party notices require owner review; not MIT.",
+    "matching_binaries": [
+      "_internal/webview/lib/Microsoft.Web.WebView2.Core.dll",
+      "_internal/webview/lib/Microsoft.Web.WebView2.WinForms.dll",
+      "_internal/webview/lib/runtimes/win-arm64/native/WebView2Loader.dll",
+      "_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll",
+      "_internal/webview/lib/runtimes/win-x86/native/WebView2Loader.dll"
+    ]
+  }
+]
