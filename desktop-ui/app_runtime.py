@@ -236,7 +236,7 @@ class BridgeSupervisor:
         route = self.routes.snapshot()
         capture = (route.get('pair') or {}).get('capture', {})
         return {
-            'application': {'name': APP_NAME, 'version': '0.1.0', 'single_instance': True},
+            'application': {'name': APP_NAME, 'version': '0.1.0-beta', 'single_instance': True},
             'paths': {'data_directory': str(self.root), 'portable': self.paths.portable,
                       'fallback_reason': self.paths.fallback_reason},
             'service': {'running': running, 'connection': connection, 'detail': detail,

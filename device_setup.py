@@ -8,7 +8,7 @@ import threading
 from types import SimpleNamespace
 
 from atvv_protocol import SERVICE, TX, AUDIO, CONTROL, CAPABILITIES, capabilities
-from local_config import normalize_address, config_path
+from local_config import normalize_address, config_path, address as active_address
 from phase2_handshake import Controller
 
 PROFILE = 'atvv-g10-128-v1'
@@ -103,6 +103,7 @@ def validate_evidence(evidence, address):
 class DeviceSetup:
     def __init__(self, path=None, *, scanner=None, checker=None):
         self.path = Path(path) if path else config_path()
+        self.active_address = None if path else active_address
         self.scanner = scanner or scan_candidates
         self.checker = checker or check_candidate
         self.lock = threading.RLock()
@@ -132,6 +133,7 @@ class DeviceSetup:
     def snapshot(self):
         with self.lock:
             selected, compatible = None, False
+            mismatch = False
             try:
                 data = self._load()
                 selected = data.get('selected_device')
@@ -145,13 +147,23 @@ class DeviceSetup:
                     age = datetime.now(timezone.utc) - stamp
                     compatible = (timedelta(0) <= age < timedelta(days=30)
                                   and validate_evidence(record, selected['address']))
+                    if self.active_address and self.active_address() != selected['address']:
+                        compatible = False
+                        mismatch = True
             except (ValueError, TypeError, KeyError, AttributeError):
                 compatible = False
             except RuntimeError as exc:
                 return {'state': 'failed', 'message': str(exc), 'selected': None, 'compatible': False,
                         'candidates': self.candidates, 'busy': self.busy}
-            compatible = compatible and self.state != 'failed'
-            return {'state': self.state if not compatible else 'compatible', 'message': self.message,
+            compatible = compatible and self.state != 'failed' and not self.busy
+            state, message = self.state, self.message
+            if compatible:
+                state, message = 'compatible', '已保存的设备身份与有效 ATVV 能力证据匹配。'
+            elif mismatch:
+                state, message = 'failed', '实际蓝牙地址或环境变量覆盖与选择的设备不一致，请移除旧覆盖并重新检查。'
+            elif selected and state in ('compatible', 'not_checked'):
+                state, message = 'selected', '已保存设备，但兼容性证据未确认或已失效，请重新检查。'
+            return {'state': state, 'message': message,
                     'selected': selected, 'compatible': bool(compatible),
                     'candidates': self.candidates, 'busy': self.busy}
 

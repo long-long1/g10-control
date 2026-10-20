@@ -20,6 +20,12 @@ for package in (
     WINRT_IMPORTS += collect_submodules(package)
 
 common_hiddenimports = WINRT_IMPORTS + ['pycaw.pycaw']
+
+def windows_audio_only(entries):
+    # The upstream hook collects every wheel variant, including ASIO/macOS/ARM.
+    # This candidate supports x64 shared WASAPI only; retain that exact binary.
+    return [entry for entry in entries if not Path(entry[0]).name.lower().startswith('libportaudio')
+            or Path(entry[0]).name.lower() == 'libportaudio64bit.dll']
 main_analysis = Analysis(
     [str(ROOT / "desktop-ui" / "control_entry.py")],
     pathex=[str(ROOT), str(ROOT / "desktop-ui")],
@@ -36,6 +42,8 @@ main_analysis = Analysis(
 # Analysis writes the same warning filename for both entry points. Keep each
 # report so the bridge analysis cannot hide the control's dependency warnings.
 Path(WARNFILE).with_name('warn-control.txt').write_text(Path(WARNFILE).read_text(encoding='utf-8'), encoding='utf-8')
+main_analysis.binaries = windows_audio_only(main_analysis.binaries)
+main_analysis.datas = windows_audio_only(main_analysis.datas)
 main_pyz = PYZ(main_analysis.pure)
 main_exe = EXE(
     main_pyz,
@@ -65,6 +73,8 @@ bridge_analysis = Analysis(
     optimize=0,
 )
 Path(WARNFILE).with_name('warn-bridge.txt').write_text(Path(WARNFILE).read_text(encoding='utf-8'), encoding='utf-8')
+bridge_analysis.binaries = windows_audio_only(bridge_analysis.binaries)
+bridge_analysis.datas = windows_audio_only(bridge_analysis.datas)
 bridge_pyz = PYZ(bridge_analysis.pure)
 bridge_exe = EXE(
     bridge_pyz,

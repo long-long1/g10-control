@@ -47,7 +47,7 @@ def check_assets(index: Path) -> list[str]:
     return parser.urls
 
 
-def check_webview() -> dict:
+def _webview_environment() -> dict:
     # Use the same pythonnet/WinForms/loader paths as pywebview. Importing the
     # backend checks .NET; GetAvailableBrowserVersionString does not open a UI.
     from webview.platforms import winforms
@@ -57,6 +57,16 @@ def check_webview() -> dict:
     from Microsoft.Web.WebView2.Core import CoreWebView2Environment
     return {'renderer': winforms.renderer,
             'browser_version': str(CoreWebView2Environment.GetAvailableBrowserVersionString(None))}
+
+
+def check_webview() -> dict:
+    try:
+        return _webview_environment()
+    except Exception as exc:
+        raise RuntimeError('无法初始化 WebView2/.NET 运行环境。请手动检查或安装 Microsoft Edge WebView2 Runtime'
+                           ' 和 .NET Framework 4.6.2 或更新版本，然后重试；程序不会自动安装。'
+                           ' WebView2 官方说明：https://developer.microsoft.com/microsoft-edge/webview2/'
+                           f'；原因为：{exc}') from exc
 
 
 def _webview_probe(index: Path) -> dict:
@@ -99,6 +109,17 @@ def _webview_probe(index: Path) -> dict:
                     time.sleep(.1)
                 else:
                     result['error'] = 'Route settings preview did not show a disabled verification action'
+            if not result.get('error'):
+                window.evaluate_js("Array.from(document.querySelectorAll('.side-nav button')).find(x => x.textContent.includes('按键映射'))?.click()")
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    keys = window.evaluate_js("({unavailable:document.body.innerText.includes('此版本的按键观察器不可用'),disabled:Array.from(document.querySelectorAll('button')).some(x=>x.textContent==='此版本不可用'&&x.disabled)})")
+                    if keys and keys['unavailable'] and keys['disabled']:
+                        result['key_observer_ui'] = keys
+                        break
+                    time.sleep(.1)
+                else:
+                    result['error'] = 'Unavailable key observer was not disabled in UI'
         except Exception:
             result['error'] = traceback.format_exc()
         finally:
@@ -134,7 +155,9 @@ def diagnose(component: str) -> int:
                    'winrt.windows.devices.bluetooth.genericattributeprofile',
                    'winrt.windows.devices.enumeration', 'winrt.windows.storage.streams',
                    'winrt.windows.foundation', 'winrt.windows.foundation.collections',
-                   'g10_audio_bridge']
+                   'g10_audio_bridge', 'device_setup', 'onboarding', 'bleak',
+                   'bleak.backends.winrt.scanner', 'bleak.backends.winrt.client',
+                   'winrt.windows.devices.bluetooth.advertisement', 'winrt.windows.devices.radios']
         if component == 'control':
             modules += ['webview', 'pystray', 'PIL.Image', 'app']
         for name in modules:

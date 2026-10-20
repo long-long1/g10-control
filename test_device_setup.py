@@ -78,6 +78,12 @@ class DeviceTests(unittest.TestCase):
         self.assertFalse(self.setup.check(True)['compatible'])
         self.assertFalse(DeviceSetup(self.path).snapshot()['compatible'])
 
+    def test_environment_override_cannot_claim_another_device_is_compatible(self):
+        self.select()
+        self.setup.check(True)
+        self.setup.active_address = lambda: 'AABBCCDDEEFF'
+        self.assertFalse(self.setup.snapshot()['compatible'])
+
     def test_failure_refresh_clears_candidates(self):
         self.select()
         self.scanner.side_effect = PermissionError('denied')

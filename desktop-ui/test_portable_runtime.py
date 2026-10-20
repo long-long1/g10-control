@@ -187,12 +187,14 @@ class PortableRuntimeTests(unittest.TestCase):
                 patch.object(runtime.sys, 'argv', ['G10-Control.exe', '--diagnose-startup', str(report)]), \
                 patch.object(diagnostics, 'check_webview', return_value={'renderer': 'fake'}), \
                 patch.object(runtime.BridgeSupervisor, 'start', side_effect=AssertionError('business start')) as start, \
+                patch.object(runtime.DeviceSetup, 'scan', side_effect=AssertionError('real BLE scan')) as scan, \
+                patch.object(runtime.DeviceSetup, 'check', side_effect=AssertionError('real BLE check')) as check, \
                 patch.object(KeyDetection, 'start', side_effect=AssertionError('input start')) as keys, \
                 patch.object(Application, 'get_audio_devices', side_effect=AssertionError('endpoint access')) as audio, \
                 patch.object(bridge, 'select_verified_pair', side_effect=AssertionError('route access')) as route, \
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(diagnostics.diagnose('control'), 0)
-        for method in (start, keys, audio, route):
+        for method in (start, keys, audio, route, scan, check):
             method.assert_not_called()
         result = json.loads(report.read_text(encoding='utf-8'))
         self.assertTrue(result['ok'])

@@ -1,6 +1,6 @@
 # G10 Control Portable 版本开发交接
 
-> 最新阶段：第四轮本机 VB-CABLE 路由证明与 Portable 持久化（2026-10-20），见第 12 节。第 1–11 节保留历史审查和各轮基线，其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。不得将离线测试或无硬件诊断通过理解为真实音频路由或干净电脑验收通过。
+> 最新阶段：Windows 11 x64 v0.1.0 Beta 本地候选功能轮（2026-10-20），见第 13 节。第 1–12 节保留历史审查和各轮基线，其中“尚未接入/未构建/未运行”等描述仅代表当轮状态。本轮一次真实 VB-CABLE 合成验证通过；真实 BLE 及干净电脑验收仍待完成，候选目录尚不能对外分发。
 
 ## 1. 仓库状态
 
@@ -379,3 +379,41 @@ G10-AudioBridge.exe  093124223A595629184B3ED4E8506390B79E0500A4298CAD46DC944A946
 - `get_status` 明确返回冻结版按键观察器不可用，UI 禁用按钮并显示原因。Windows 启动项状态可以识别旧/移动后的命令，只有用户再次明确确认才修复当前用户路径；真实启动项本轮未写。相关注册表写入全部在 mock 下测试。依赖缺失在窗口创建前报错/清理，向导展示中文处理方式；未卸载真实 WebView2/.NET 或驱动。
 - 安全退出先停止按键观察再停止桥接；清理失败保持窗口供重试，主循环 finally 确保其他清理和 mutex 释放尝试不被前一步异常跳过。没有强杀 BLE 进程。
 - 桌面 **33/33**（新增 9 项 shell/注册表/缺依赖/退出检查），环境向导 **7/7**，前端 **7/7** 与 TypeScript/Vite 构建通过。重新 clean 构建 PyInstaller 成功，日志 `output/beta-stage4-build.log`。以上实际生命周期检查均在非业务模式下，不能替代真实 BLE/音频桥接退出测试。
+
+### 阶段五：本地 Beta 候选与交付边界
+
+- 新增 `build/stage_beta.py`，从构建目录按允许列表生成独立本地候选，拒绝覆盖已有目录，不生成 ZIP、不上传。只带两个 EXE、`_internal`、marker、空 data、中文说明、验收清单与许可审查材料。逐文件 SHA-256 在 `manifest.json`；`package-audit.json` 检查禁止目录、配置/日志/录音、本机已知身份字节（含 ZIP 和两个 EXE 的压缩 PYZ），不执行提取的代码。此机械审查不等于全面安全审计或再分发授权。
+- `docs/README-PORTABLE.zh-CN.md` 说明安装前提、五步配置、CABLE 方向、隐私确认、手动豆包、移动和回退、过期/缺依赖处理；`docs/ACCEPTANCE-WIN11-X64.md` 为尚未执行的干净电脑验收清单，分开无业务检查、单独授权的硬件验收与发行许可门槛。
+- 修正主页残留的“已配对/已配置”和固定型号描述，改用实际设备选择、兼容性及路由状态。增加实际组件渲染断言，未检测不显示成功。补充设备证据与实际运行地址一致性、环境重检异常、无设备证据拒绝启动、诊断不得扫描 BLE 的测试；WebView2/CLR 启动异常提供中文处理说明。
+- PyInstaller 的 sounddevice hook 原来收集所有平台/架构的 PortAudio（含 ASIO）；两个 analysis 仅保留当前 x64 WASAPI 所需 `libportaudio64bit.dll`。没有修改音频算法。冻结诊断实际导入 Windows Bleak scanner/client 和 WinRT 依赖，导入不等于扫描；没有创建真实 watcher、连接或 GATT 操作。
+- 最终根目录 Python **97/97**、桌面 Python **34/34**，均无失败/错误/跳过；日志为 `output/beta-final-root-tests.log`、`output/beta-final-desktop-tests.log`。前端状态/组件 **9/9**（此前 7 项加主页两项），TypeScript/Vite 构建通过。PyInstaller 6.22.3 clean onedir 构建通过；构建日志 `output/beta-final-build.log`。静态警告中的跨平台后端、类型/旧模块和 pycparser 可选 lextab/yacctab 按第 11 节分类，不能由此推断未执行的功能通过；所需冻结 Windows 导入由实际诊断覆盖。
+- 最后一轮重建曾在 `discover_hook_directories()` 的隔离子进程以 `0xC0000409` 退出，保留 `output/beta-build-hook-failure.log`。随后逐项加载 numpy、hooks-contrib、pythonnet、webview hooks 及同一隔离发现均成功（`output/beta-build-hooks-diagnostic.log`），未修改/排除 hook、未改依赖版本后重新 clean 构建。尚无证据确定该次原生异常根因，不能把重建成功说成已定位根因。
+- `docs/BETA_LICENSE_REVIEW.md`、候选 `license-inventory.json` 和 notices 列出实际版本与缺项：34 个 Python distribution、72 个已安装 npm 包（含构建/可选范围）。整体项目授权未确定；pystray LGPLv3 的库源码、应用材料和替换/重链接方案需所有者决定；部分 PyWinRT/proxy_tools 完整许可文本缺失；PortAudio、WebView2 SDK/Loader、Python/Tcl/Tk、Pillow、NumPy/OpenBLAS/编译器/VC runtime 原生许可链待核对。已收集的文本不构成合规结论，`redistribution_ready=false`。不附带 VB-CABLE、WebView2 Runtime、.NET 或豆包安装器。
+- 最终目录：`dist/G10-Control-v0.1.0-Beta-candidate-win64`（忽略、不提交）。共 **1,269 文件**，manifest 校验 **1,268** 条（不含自身）全部一致，data 为空；内容/隐私审查通过，两个 EXE 各 880 个 PYZ 模块无已知身份或自身测试模块命中，检查了 8 个本机已知身份编码/大小写模式。包内仅一份 `libportaudio64bit.dll`；无开发机地址/端点配置、日志/录音、output、.venv、node_modules 或 Git 历史。源码 web/dist 与包内静态文件逐一哈希相同（最终 JS `index-eMeECrVC.js`）。
+- **最终候选实际安全启动 6/6 通过**：`output/beta-final-exe.log`、`output/portable startup rh3a7lbn/`，分别覆盖两个 EXE 的原目录、中文/空格移动目录、阻塞 data 创建后的 LocalAppData 回退，退出 0、ok=true；三次主程序实际加载 React/CSS、WebView2 155.0.4283.62，路由按钮在无证明时禁用，冻结按键入口明确不可用/禁用。没有启动桥接业务，缺证明在音频访问前拒绝。
+- **最终候选正常生命周期 2/2 通过**：`output/beta-final-lifecycle.log`、`output/beta lifecycle s8t41f3h/`。原目录与移动目录均实际可见窗口、托盘、关闭隐藏、恢复、第二实例拒绝、设置持久化、安全退出，8 项业务操作被后端阻止。移动后读回增益 6 和向导步骤 2。此诊断使用隔离副本/数据根、System32-only PATH 和非业务开关；没有写真实用户自启动项或执行键鼠输入。不能代替干净电脑和真实桥接生命周期验收。
+
+最终两个 EXE 的 SHA-256（构建成功和上述实际运行结果分别记录）：
+
+```text
+G10-Control.exe      B626AB65988C058CDAC4A34C36EF39C1DB427E3C725E436E8AD42261D16CC440
+G10-AudioBridge.exe  C442F9BC892CF979F003421949EE51E9E686F6EE50C91A6B2639930C65D860BA
+```
+
+### 分阶段提交
+
+| 阶段 | Git commit |
+| --- | --- |
+| 一：真实合成验证与空闲保护 | `e62953356b8794bd108b509b8bfb822fe7a3801e` |
+| 二：显式发现、选择与兼容性 | `75a73c8a5b631b8363ffcbd52bb80eca8dce08fe` |
+| 三：中文可继续向导 | `61a55a3d6bfa44cc661d93ca3d85e7933957dd2d` |
+| 四：正常 UI 与安全生命周期 | `752bb3db4b81ef44e139bde05fbe8ecd835c706c` |
+| 五：本地候选、审查与最终回归 | 本节随第五阶段提交，确切 ID 见 Git 记录和本轮最终报告。 |
+
+### 给其他用户试用前仍须完成
+
+1. 所有者确定项目授权、贡献/参考边界及第三方再分发方案，补齐并验证许可材料；之后再单独确认是否制作对外试用包。
+2. 单独授权真实 BLE 扫描、已配对设备身份/ATVV 服务/特征/能力检查，验证通知恢复和安全清理。当前仅模拟通过，不能宣称真实兼容性检查已经验收；名称限制仍须明确告知。
+3. 单独授权真实 G10 音频桥接、长按/松开/断连/退出及手动豆包端到端测试。本轮真实音频只证明本机 VB-CABLE 合成路由，不能证明 G10 音频业务。
+4. 在无 Python/Node/开发路径的干净 Windows 11 x64 按清单验收，覆盖依赖缺失、安装后的路径、只读回退、目录移动、驱动/端点变化、证明过期及普通用户权限。真实自启动写入本轮未执行，须在专用验收账户明确启用验证；未卸载开发机依赖来模拟缺失。
+5. 冻结版按键观察器仍不可用，界面已明确禁用。没有自动豆包唤起、驱动安装或系统默认设备修改；这些不是已完成的 Beta 功能。

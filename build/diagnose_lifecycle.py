@@ -1,5 +1,6 @@
 """Normal visible UI/tray lifecycle in an isolated copy; all business APIs denied."""
 import json
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -11,10 +12,13 @@ from diagnose_portable import move_when_released
 
 def main():
     root = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--bundle', type=Path, default=root / 'dist/G10-Control')
+    args = parser.parse_args()
     session = Path(tempfile.mkdtemp(prefix='beta lifecycle ', dir=root / 'output')).resolve()
     program = session / 'first location'
     program.mkdir()
-    bundle = root / 'dist/G10-Control'
+    bundle = args.bundle.resolve()
     for name in ('G10-Control.exe', 'G10-AudioBridge.exe', 'portable.marker'):
         shutil.copy2(bundle / name, program / name)
     shutil.copytree(bundle / '_internal', program / '_internal')

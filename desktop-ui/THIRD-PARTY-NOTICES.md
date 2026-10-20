@@ -9,3 +9,5 @@ This notice is for the G10 Control desktop shell and its current development dep
 - **AxonKey** — used only as a behavior and feature reference. No AxonKey source code, artwork, or UI assets are included. The inspected reference checkout at commit `a8c23b98fc6468013c9647a8b27646e5a9821303` had no root `LICENSE` file, so source reuse is deferred pending a clear license grant.
 
 Before distributing a Windows installer, regenerate a complete license report from the locked Python and npm dependency sets and ship every required notice and license text. The current working tree is not yet an installer-ready software bill of materials.
+
+For the local v0.1.0 Beta candidate, `build/stage_beta.py` collects installed Python/npm notices and the Python license stack into `licenses/` and records the scope, versions and missing texts in `license-inventory.json`. See `docs/BETA_LICENSE_REVIEW.md` in source (`BETA-LICENSE-REVIEW.md` in the candidate) for unresolved overall-project authorization, LGPL source/replacement obligations and native SDK/license gaps. This collection does not authorize external distribution; no ZIP or Release is produced.

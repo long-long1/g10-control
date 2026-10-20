@@ -50,6 +50,11 @@ class WizardTests(unittest.TestCase):
         self.environment.return_value = [{'name': 'WebView2', 'passed': False, 'detail': 'missing'}]
         self.assertEqual(self.wizard.detect_environment()['statuses'][0], 'failed')
 
+    def test_exception_during_recheck_cannot_reuse_old_success(self):
+        self.wizard.detect_environment()
+        self.environment.side_effect = PermissionError('denied')
+        self.assertEqual(self.wizard.detect_environment()['statuses'][0], 'failed')
+
     def test_scanning_and_expiry_are_distinct(self):
         device = {'busy': True, 'compatible': False, 'state': 'scanning', 'selected': None}
         route = {'pair': None, 'validated': False, 'state': 'expired'}
@@ -64,3 +69,11 @@ class WizardTests(unittest.TestCase):
         self.assertFalse(checks[2]['passed'])
         self.assertIn('权限', checks[1]['detail'])
         self.assertIn('手动安装', checks[2]['detail'])
+
+    def test_pre_window_clr_failure_has_chinese_manual_repair_message(self):
+        from startup_diagnostics import check_webview
+        with patch('startup_diagnostics._webview_environment', side_effect=ImportError('CLR missing')):
+            with self.assertRaises(RuntimeError) as error:
+                check_webview()
+        for text in ('手动', 'WebView2', '.NET Framework', '不会自动安装'):
+            self.assertIn(text, str(error.exception))

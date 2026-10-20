@@ -34,3 +34,22 @@ test('environment errors, actual data directory and fallback remain visible',()=
  const html=render(s);
  for(const text of ['X:/Portable/data','LocalAppData','权限不足','WebView2','请手动安装'])assert.ok(html.includes(text));
 });
+
+const homeCode=buildSync({entryPoints:[fileURLToPath(new URL('../src/App.tsx',import.meta.url))],bundle:true,write:false,platform:'node',format:'cjs',external:['react','react/jsx-runtime']}).outputFiles[0].text;
+const homeModule={exports:{}};
+new Function('require','module','exports',homeCode)(require,homeModule,homeModule.exports);
+function homeState(){return {...state(),service:{connection:'stopped',processed_audio_seconds:0,cable_level_dbfs:-120,detail:'尚未启动'},device:{name:'未选择设备',address:'',transport:'Bluetooth LE',vid:null,pid:null,battery:null},microphone:{name:'待检测',validated:false}};}
+function renderHome(s){const forbidden=()=>{throw Error('Home render cannot invoke operations');};return renderToStaticMarkup(React.createElement(homeModule.exports.HomePage,{state:s,busy:false,onStart:forbidden,onStop:forbidden,onPage:forbidden,onExit:forbidden}));}
+
+test('home never claims pairing, device model or route success before detection',()=>{
+ const html=renderHome(homeState());
+ assert.match(html,/未选择设备/);assert.match(html,/待验证路由/);
+ assert.doesNotMatch(html,/已配对|已配置|Air Mouse|三代蓝牙/);
+});
+
+test('home reflects selected identity and independent compatibility and route gates',()=>{
+ const s=homeState();s.device.name='实际广播名称';s.device_setup.selected={id:'test',name:s.device.name};
+ assert.match(renderHome(s),/实际广播名称/);assert.match(renderHome(s),/待验证兼容性/);
+ s.device_setup.compatible=true;s.microphone.validated=true;
+ assert.match(renderHome(s),/兼容性已验证/);assert.match(renderHome(s),/路由已验证/);
+});

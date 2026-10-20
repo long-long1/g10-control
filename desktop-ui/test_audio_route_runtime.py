@@ -49,6 +49,17 @@ class RouteRuntimeTests(unittest.TestCase):
         popen.assert_not_called()
         self.assertFalse(self.supervisor.snapshot()['microphone']['validated'])
 
+    def test_unverified_device_blocks_spawn_even_with_valid_audio_proof(self):
+        from device_setup import DeviceSetup
+        self.prove()
+        self.supervisor.devices = DeviceSetup(self.paths.data_path('local-settings.json'))
+        with patch.object(runtime, 'require_address', return_value='112233445566'), \
+                patch.object(self.supervisor, '_external_bridge_processes', return_value=[]), \
+                patch.object(runtime.subprocess, 'Popen') as popen:
+            with self.assertRaisesRegex(RuntimeError, '尚未通过'):
+                self.supervisor.start()
+        popen.assert_not_called()
+
     def test_manual_bridge_uses_proof_without_legacy_capture_config(self):
         self.prove()
         process = Mock()

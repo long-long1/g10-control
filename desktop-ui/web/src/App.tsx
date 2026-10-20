@@ -20,7 +20,7 @@ const starterSettings: Settings = {
 };
 
 const emptySnapshot: Snapshot = {
-  application:{name:'G10 Control',version:'0.1.0',single_instance:true},
+  application:{name:'G10 Control',version:'0.1.0-beta',single_instance:true},
   service:{running:false,connection:'stopped',detail:'等待启动',started_at:null,audio_active:false,processed_audio_seconds:0,input_level_dbfs:-120,cable_level_dbfs:-120,cable_peak:0,error_count:0,error:null},
   device:{name:'未选择设备',address:'',transport:'Bluetooth LE',vid:null,pid:null,battery:null},
   device_setup:{state:'not_checked',message:'请扫描并选择设备；兼容性尚未验证。',selected:null,compatible:false,candidates:[],busy:false},
@@ -259,7 +259,7 @@ export default function App(){
   </div>;
 }
 
-function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy:boolean;onStart:()=>void;onStop:()=>void;onPage:(page:Page)=>void;onExit:()=>void}){
+export function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy:boolean;onStart:()=>void;onStop:()=>void;onPage:(page:Page)=>void;onExit:()=>void}){
   const live=state.service.connection==='connected';
   const connecting=state.service.connection==='starting';
   return <div className="content-grid">
@@ -273,15 +273,15 @@ function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy
     </section>
 
     <section className="device-card panel">
-      <div className="panel-head"><div><span className="section-kicker">CONNECTED DEVICE</span><h3>设备信息</h3></div><span className={`badge ${live?'badge-green':'badge-muted'}`}>{live?'在线':connecting?'连接中':'已配对'}</span></div>
-      <div className="device-profile"><div className="remote-art"><div className="remote-top"/><div className="remote-pad"><span/><i/><b/></div><div className="remote-btns"><i/><i/><i/></div><div className="remote-mic"/></div><div className="profile-name"><b>{state.device.name} Air Mouse</b><small>三代蓝牙空中飞鼠 · {state.device.transport}</small></div></div>
+      <div className="panel-head"><div><span className="section-kicker">CONNECTED DEVICE</span><h3>设备信息</h3></div><span className={`badge ${live?'badge-green':'badge-muted'}`}>{live?'在线':connecting?'连接中':state.device_setup.compatible?'兼容性已验证':state.device_setup.selected?'待验证兼容性':'未选择设备'}</span></div>
+      <div className="device-profile"><div className="remote-art"><div className="remote-top"/><div className="remote-pad"><span/><i/><b/></div><div className="remote-btns"><i/><i/><i/></div><div className="remote-mic"/></div><div className="profile-name"><b>{state.device.name}</b><small>{state.device.transport} · {state.device_setup.message}</small></div></div>
       <div className="device-facts"><Fact label="蓝牙地址" value={state.device.address}/><Fact label="VID / PID" value={state.device.vid&&state.device.pid?`${state.device.vid} / ${state.device.pid}`:'未检测 / 不适用'}/><Fact label="连接类型" value="Bluetooth Low Energy"/><Fact label="电量" value={state.device.battery===null?'设备未提供已验证数据':`${state.device.battery}%`}/></div>
       <div className="device-footer"><div className="service-indicator"><span className={`status-dot ${live?'good':connecting?'pending':''}`}/><span>{state.service.detail}</span></div><button className="inline-link" onClick={()=>onPage('logs')}>查看状态日志<ChevronRight size={14}/></button></div>
     </section>
 
     <section className="voice-card panel">
       <div className="panel-head"><div><span className="section-kicker">VOICE INPUT</span><h3>麦克风语音</h3></div><button className="circle-nav" onClick={()=>onPage('voice')} aria-label="语音设置"><ChevronRight size={17}/></button></div>
-      <div className="voice-route"><div className="route-icon"><Mic2 size={21}/></div><div className="route-copy"><b>{state.service.audio_active?'正在接收遥控器声音':'G10 麦克风通道'}</b><small>{state.microphone.name}</small></div><span className={`badge ${state.service.audio_active?'badge-green':'badge-muted'}`}>{state.service.audio_active?'输入中':'已配置'}</span></div>
+      <div className="voice-route"><div className="route-icon"><Mic2 size={21}/></div><div className="route-copy"><b>{state.service.audio_active?'正在接收遥控器声音':'G10 麦克风通道'}</b><small>{state.microphone.name}</small></div><span className={`badge ${state.service.audio_active?'badge-green':'badge-muted'}`}>{state.service.audio_active?'输入中':state.microphone.validated?'路由已验证':'待验证路由'}</span></div>
       <Meter value={state.service.cable_level_dbfs} label="虚拟麦克风电平"/>
       <div className="voice-stats"><span><AudioLines size={14}/>{state.service.processed_audio_seconds.toFixed(1)} 秒已解码</span><span><ShieldCheck size={14}/>{state.microphone.validated?'本机路由已验证':'本机路由待验证'}</span></div>
     </section>

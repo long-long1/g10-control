@@ -97,8 +97,11 @@ class SetupWizard:
 
     def detect_environment(self):
         self.checking = True
+        self.checks = []
         try:
             self.checks = self.environment_fn()
+        except Exception as exc:
+            self.checks = [{'name': '运行环境', 'passed': False, 'detail': f'检测失败，请重试：{exc}'}]
         finally:
             self.checking = False
         return self.snapshot()
