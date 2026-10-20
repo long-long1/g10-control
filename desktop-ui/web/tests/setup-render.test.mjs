@@ -63,3 +63,10 @@ test('home reflects selected identity and independent compatibility and route ga
  s.device_setup.compatible=true;s.microphone.validated=true;
  assert.match(renderHome(s),/兼容性已验证/);assert.match(renderHome(s),/路由已验证/);
 });
+
+test('unknown heartbeat keeps safety stop available and never claims readiness',()=>{
+ const s=homeState();s.service.running=true;s.service.connection='unknown';s.service.detail='心跳失效，状态未知';
+ const html=renderHome(s);
+ assert.match(html,/状态未知/);assert.match(html,/安全停止服务/);
+ assert.doesNotMatch(html,/遥控器已准备好|已连接 · BLE 服务就绪/);
+});

@@ -13,6 +13,10 @@ import re
 import shutil
 import sys
 import zipfile
+try:
+    from .release_evidence import write_evidence
+except ImportError:
+    from release_evidence import write_evidence
 
 FORBIDDEN_PARTS = {'.git', '.venv', 'node_modules', 'output', '__pycache__'}
 FORBIDDEN_NAMES = {'local-settings.json', 'settings.json', 'route-proof.json', 'setup-progress.json',
@@ -20,7 +24,8 @@ FORBIDDEN_NAMES = {'local-settings.json', 'settings.json', 'route-proof.json', '
 FORBIDDEN_SUFFIXES = {'.log', '.jsonl', '.wav', '.pcm', '.adpcm', '.dmp', '.mp3', '.mp4'}
 ROOT_ALLOWED = {'G10-Control.exe', 'G10-AudioBridge.exe', '_internal', 'portable.marker', 'data', 'licenses',
                 'README-PORTABLE.zh-CN.md', 'ACCEPTANCE-WIN11-X64.md', 'BETA-LICENSE-REVIEW.md',
-                'LICENSE_STATUS.md', 'THIRD-PARTY-NOTICES.md', 'license-inventory.json', 'package-audit.json', 'manifest.json'}
+                'LICENSE_STATUS.md', 'THIRD-PARTY-NOTICES.md', 'license-inventory.json', 'package-audit.json', 'manifest.json',
+                'sbom.cdx.json', 'build-evidence.json', 'accept_win11.ps1', 'RELEASE-NOTES.zh-CN.md', 'THIRD-PARTY-LICENSES.md'}
 
 
 def audit_files(directory, identities=None):
@@ -31,6 +36,7 @@ def audit_files(directory, identities=None):
         relative = path.relative_to(directory)
         if (any(part.lower() in FORBIDDEN_PARTS for part in relative.parts)
                 or path.name.lower() in FORBIDDEN_NAMES or path.suffix.lower() in FORBIDDEN_SUFFIXES
+                or '.corrupt-' in path.name.lower()
                 or '-asio' in path.name.lower()):
             violations.append(relative.as_posix())
         if relative.parts[0] == 'data' and path.is_file():
@@ -96,7 +102,12 @@ def private_identities(root):
             forms.update(separator.join(variant[i:i+2] for i in range(0,12,2))
                          for variant in (compact.upper(), compact.lower()) for separator in (':', '-'))
         patterns.extend(form.encode(encoding) for form in forms for encoding in ('utf-8', 'utf-16-le'))
-    return {'known_local_identity': list(set(patterns))} if patterns else {}
+    result = {'known_local_identity': list(set(patterns))} if patterns else {}
+    paths = {str(root.resolve()), os.environ.get('USERPROFILE', '')}
+    result['developer_path'] = list({form.encode(encoding) for path in paths if path
+                                     for form in (path, path.replace('\\', '/'), path.lower())
+                                     for encoding in ('utf-8', 'utf-16-le')})
+    return result
 
 
 def license_file(path):
@@ -177,6 +188,7 @@ def main():
                  'docs/BETA_LICENSE_REVIEW.md': 'BETA-LICENSE-REVIEW.md',
                  'LICENSE_STATUS.md': 'LICENSE_STATUS.md',
                  'desktop-ui/THIRD-PARTY-NOTICES.md': 'THIRD-PARTY-NOTICES.md'}
+    documents.update({'build/accept_win11.ps1': 'accept_win11.ps1', 'docs/RELEASE-NOTES.zh-CN.md': 'RELEASE-NOTES.zh-CN.md'})
     for origin, name in documents.items():
         shutil.copy2(root / origin, target / name)
     status = target / 'LICENSE_STATUS.md'
@@ -186,6 +198,7 @@ def main():
     embedded, modules = embedded_audit(target, identities)
     inventory = collect_licenses(root, target, modules)
     (target / 'license-inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding='utf-8')
+    evidence_summary = write_evidence(root, target, inventory, modules)
     audit = audit_files(target, identities)
     audit['unexpected_root_entries'] = sorted(path.name for path in target.iterdir() if path.name not in ROOT_ALLOWED)
     audit['embedded_code'] = embedded
@@ -200,7 +213,7 @@ def main():
     (target / 'manifest.json').write_text(json.dumps({'files': files, 'excludes_self': True}, indent=2), encoding='utf-8')
     print(json.dumps({'directory': str(target), 'files': len(files), 'privacy_audit_passed': audit['passed'],
                       'redistribution_ready': False, 'python_distributions': len(inventory['python']),
-                      'npm_packages': len(inventory['npm'])}, ensure_ascii=False))
+                      'npm_packages': len(inventory['npm']), 'sbom': evidence_summary}, ensure_ascii=False))
     if not audit['passed']:
         raise SystemExit('Candidate audit failed; inspect package-audit.json. No archive was created.')
 

@@ -13,7 +13,7 @@ export type SetupStatus = {step:number;completed:boolean;ready:boolean;statuses:
 export type Snapshot = {
   settings_warning?: string|null;
   application: { name: string; version: string; single_instance: boolean };
-  service: { running:boolean; connection:'stopped'|'starting'|'connected'; detail:string; started_at:string|null; audio_active:boolean; processed_audio_seconds:number; input_level_dbfs:number; cable_level_dbfs:number; cable_peak:number; error_count:number; error:string|null };
+  service: { running:boolean; connection:'stopped'|'starting'|'connected'|'unknown'; detail:string; started_at:string|null; audio_active:boolean; processed_audio_seconds:number; input_level_dbfs:number; cable_level_dbfs:number; cable_peak:number; error_count:number; error:string|null };
   device: { name:string; address:string; transport:string; vid:string|null; pid:string|null; battery:number|null };
   device_setup: DeviceSetupStatus;
   setup: SetupStatus;

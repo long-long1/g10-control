@@ -4,6 +4,22 @@
 
 ## 非硬件验收
 
+### 可重复执行的安全脚本
+
+将完整且未运行过的候选目录复制到待验收 Windows 11 x64 普通用户环境。在候选目录打开 PowerShell：
+
+```powershell
+powershell -NoProfile -File .\accept_win11.ps1 -Bundle .
+```
+
+脚本只依赖系统 PowerShell 和包内 EXE。先核验 manifest 全部哈希并拒绝额外文件，再复制到临时中文/空格目录，以仅含 System32 的子进程 PATH 运行两个 EXE 的安全启动诊断；用文件占用 data 路径模拟写入失败，检查 LocalAppData 回退。所有环境变量只作用于当前进程并在 finally 恢复，不改注册表、ACL、系统设置，不做 DOM 点击或键鼠模拟。每次生成新目录和 JSON 报告，失败保留证据，不强杀超时进程。正式候选 data 不受影响。
+
+开发机运行只证明隔离副本行为。**真正无 Python/Node、无开发目录的虚拟机验收仍待执行**；操作人应在新 Windows 11 VM 中记录系统构建号、普通用户、软件清单与候选 manifest 哈希，执行上述脚本并附报告。不能用缩减 PATH 声称已证明系统没有 Python/Node。
+
+真正只读 ACL：由后续验收人员提供已只读的介质/目录，然后通过安全诊断检查回退；本脚本不会建立或修改 ACL。文件阻塞模拟与真实 ACL 验收必须分别记录。
+
+WebView2 / VB-CABLE 缺失：当前只执行 `test_failure_recovery` 的依赖注入模拟，检查向导失败、重试、完成禁用和业务启动门槛；无真实缺依赖 VM 时标为待执行。后续在原本未安装 WebView2 的 VM 运行 Control 安全诊断，预期退出 1、报告中文安装说明；AudioBridge 诊断仍应通过。用户自行安装后再跑脚本。无 VB-CABLE 时启动诊断可以通过（它不访问端点），不能据此声称路由可用；端点/音频验收需要另行授权。禁止卸载开发机软件制造缺失。
+
 - [ ] 无 Python/Node/开发目录，整体复制后主 EXE、React/CSS 和中文向导正常。
 - [ ] WebView2/.NET 缺失时中文提示及日志正确；用户手动安装官方组件后恢复。
 - [ ] 可写目录使用 data；真正只读 ACL 下回退 LocalAppData 并显示原因；两者不可写时明确失败。

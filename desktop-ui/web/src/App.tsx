@@ -9,6 +9,7 @@ import { nativeAPI, type EventRow, type KeySnapshot, type Settings, type Snapsho
 import { DevicePanel } from './DevicePanel';
 import { SetupWizard } from './SetupWizard';
 import { RoutePanel } from './RoutePanel';
+import { unavailableSnapshot } from './setup_state';
 
 type Page = 'home' | 'voice' | 'keys' | 'settings' | 'logs';
 const DEFAULT_CABLE = '';
@@ -65,13 +66,13 @@ export default function App(){
 
   const refresh=useCallback(async()=>{
     const bridge=nativeAPI();
-    if(!bridge)return;
+    if(!bridge){setConnectedToHost(false);setState(unavailableSnapshot);return;}
     try{
       const next=await bridge.get_status();
       setState(next);setConnectedToHost(true);
       if(page==='logs'||page==='voice')setLogs(await bridge.get_logs());
       if(page==='keys')setKeyState(await bridge.get_key_events());
-    }catch(error){setToast(error instanceof Error?error.message:'无法读取本地设备状态');}
+    }catch(error){setConnectedToHost(false);setState(unavailableSnapshot);setToast(error instanceof Error?error.message:'无法读取本地设备状态');}
   },[page]);
 
   useEffect(()=>{
@@ -263,10 +264,11 @@ export default function App(){
 export function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapshot;busy:boolean;onStart:()=>void;onStop:()=>void;onPage:(page:Page)=>void;onExit:()=>void}){
   const live=state.service.connection==='connected';
   const connecting=state.service.connection==='starting';
+  const unknown=state.service.connection==='unknown';
   return <div className="content-grid">
     <section className="hero-card">
-      <div className="hero-copy"><div className="eyebrow"><span className={`status-dot ${live?'good':connecting?'pending':''}`}/>{live?'已连接 · BLE 服务就绪':connecting?'正在连接设备':'G10 控制台'}</div><h2>{live?'遥控器已准备好':connecting?'正在寻找 G10 遥控器':'管理你的 G10 遥控器'}</h2><p>{live?'语音链路就绪，按住红键说话即可将声音送入虚拟麦克风。':connecting?'正在读取 GATT 服务并建立 ATVV 音频通知。':'连接后即可通过红键使用麦克风语音输入。'}</p>
-        <div className="hero-actions">{live?<button className="button secondary" onClick={onStop} disabled={busy}><CircleStop size={16}/>{busy?'正在安全停止…':'安全停止服务'}</button>:<button className="button primary" onClick={onStart} disabled={busy}><Bluetooth size={16}/>{busy?'正在启动…':connecting?'重新连接 G10':'连接 G10'}</button>}<button className="button text-button" onClick={()=>onPage('voice')}><Mic2 size={16}/>语音设置<ChevronRight size={14}/></button></div>
+      <div className="hero-copy"><div className="eyebrow"><span className={`status-dot ${live?'good':connecting?'pending':''}`}/>{live?'已连接 · BLE 服务就绪':unknown?'状态未知':connecting?'正在连接设备':'G10 控制台'}</div><h2>{live?'遥控器已准备好':unknown?'请重新确认设备状态':connecting?'正在寻找 G10 遥控器':'管理你的 G10 遥控器'}</h2><p>{live?'语音链路就绪，按住红键说话即可将声音送入虚拟麦克风。':unknown?state.service.detail:connecting?'正在读取 GATT 服务并建立 ATVV 音频通知。':'连接后即可通过红键使用麦克风语音输入。'}</p>
+        <div className="hero-actions">{state.service.running?<button className="button secondary" onClick={onStop} disabled={busy}><CircleStop size={16}/>{busy?'正在安全停止…':'安全停止服务'}</button>:<button className="button primary" onClick={onStart} disabled={busy}><Bluetooth size={16}/>{busy?'正在启动…':connecting?'重新连接 G10':'连接 G10'}</button>}<button className="button text-button" onClick={()=>onPage('voice')}><Mic2 size={16}/>语音设置<ChevronRight size={14}/></button></div>
         <div className="hero-meta"><span><span className="tiny-dot green"/>声音仅在本机处理</span><span><span className="tiny-dot violet"/>不修改默认麦克风</span></div>
       </div>
       <div className="hero-visual" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="signal-ring"><AudioWaveform size={54} strokeWidth={1.35}/></div><div className="orbit-node node-a"><Bluetooth size={14}/></div><div className="orbit-node node-b"><Mic2 size={14}/></div><div className="orbit-node node-c"><Volume2 size={14}/></div><span className="visual-glow"/></div>
@@ -274,7 +276,7 @@ export function HomePage({state,busy,onStart,onStop,onPage,onExit}:{state:Snapsh
     </section>
 
     <section className="device-card panel">
-      <div className="panel-head"><div><span className="section-kicker">CONNECTED DEVICE</span><h3>设备信息</h3></div><span className={`badge ${live?'badge-green':'badge-muted'}`}>{live?'在线':connecting?'连接中':state.device_setup.compatible?'兼容性已验证':state.device_setup.selected?'待验证兼容性':'未选择设备'}</span></div>
+      <div className="panel-head"><div><span className="section-kicker">CONNECTED DEVICE</span><h3>设备信息</h3></div><span className={`badge ${live?'badge-green':'badge-muted'}`}>{live?'在线':unknown?'状态未知':connecting?'连接中':state.device_setup.compatible?'兼容性已验证':state.device_setup.selected?'待验证兼容性':'未选择设备'}</span></div>
       <div className="device-profile"><div className="remote-art"><div className="remote-top"/><div className="remote-pad"><span/><i/><b/></div><div className="remote-btns"><i/><i/><i/></div><div className="remote-mic"/></div><div className="profile-name"><b>{state.device.name}</b><small>{state.device.transport} · {state.device_setup.message}</small></div></div>
       <div className="device-facts"><Fact label="蓝牙地址" value={state.device.address}/><Fact label="VID / PID" value={state.device.vid&&state.device.pid?`${state.device.vid} / ${state.device.pid}`:'未检测 / 不适用'}/><Fact label="连接类型" value="Bluetooth Low Energy"/><Fact label="电量" value={state.device.battery===null?'设备未提供已验证数据':`${state.device.battery}%`}/></div>
       <div className="device-footer"><div className="service-indicator"><span className={`status-dot ${live?'good':connecting?'pending':''}`}/><span>{state.service.detail}</span></div><button className="inline-link" onClick={()=>onPage('logs')}>查看状态日志<ChevronRight size={14}/></button></div>

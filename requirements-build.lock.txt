@@ -1,0 +1,35 @@
+# Complete Windows x64 build environment snapshot; install in an isolated venv.
+# Versions pinned; wheel hashes/supply-chain verification remain pending.
+altgraph==0.17.5
+bleak==3.0.2
+bottle==0.13.4
+cffi==2.1.1
+clr_loader==0.3.1
+comtypes==1.4.17
+numpy==2.5.4
+packaging==26.3
+pefile==2024.8.26
+pillow==13.0.0
+proxy_tools==0.1.0
+psutil==7.2.2
+pycaw==20260927
+pycparser==3.11
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.8
+pystray==0.19.5
+pythonnet==3.2.1
+pywebview==6.2.1
+pywin32-ctypes==0.2.3
+setuptools==84.0.0
+six==1.17.0
+sounddevice==0.5.6
+typing_extensions==4.16.0
+winrt-runtime==3.2.1
+winrt-Windows.Devices.Bluetooth==3.2.1
+winrt-Windows.Devices.Bluetooth.Advertisement==3.2.1
+winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1
+winrt-Windows.Devices.Enumeration==3.2.1
+winrt-Windows.Devices.Radios==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Storage.Streams==3.2.1

@@ -235,7 +235,7 @@ class BridgeSupervisor:
             connection = 'stopped'
             detail = ('蓝牙服务异常退出，请查看诊断后手动重试。' if proc and proc.returncode else self.last_message or '服务已停止')
         elif stale:
-            connection = 'starting'
+            connection = 'unknown'
             detail = '尚未收到有效服务心跳，请查看状态或安全停止后手动重试。'
         elif backend.get('connected') is True:
             connection = 'connected'

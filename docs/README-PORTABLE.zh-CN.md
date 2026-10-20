@@ -4,6 +4,10 @@
 
 ## 运行条件与启动
 
+本轮变化见 `RELEASE-NOTES.zh-CN.md`。`sbom.cdx.json`、`license-inventory.json`、`build-evidence.json` 和 `manifest.json` 是候选证据；它们不代表法律或干净机验收完成。运行前的安全脚本见 `ACCEPTANCE-WIN11-X64.md`。
+
+应用设置损坏时会显示安全默认值和恢复提示；原文件保留，可重试读取或在「软件设置」恢复默认值，先导出诊断。设备配置损坏时不会启动桥接；用户重新扫描并选择设备后，原件保存在本机 `local-settings.json.corrupt-*`，必须重新检查兼容性。备份可能含个人身份，不要上传。诊断导出不包含录音，但可能含设备身份、路径及日志，分享前检查。
+
 - Windows 11 x64，标准用户权限。
 - 已安装 Microsoft Edge WebView2 Runtime 和 .NET Framework 4.6.2 或更新版本；缺失时由用户自行安装官方版本，本程序不自动安装。
 - 音频功能需要用户自行安装官方标准 VB-CABLE，并在 Windows 中预先配对受支持 G10。
@@ -50,3 +54,6 @@
 - **目录权限失败**：查看实际数据路径；Portable 和 LocalAppData 均不可写时须修复权限后再启动。
 
 导出诊断前请自行检查报告；地址、端点 ID、本机路径属于本地资料，不要直接公开。默认不保存录音，日志和 JSON 也不会自动上传。
+
+
+开发者复建：在隔离 `.venv` 安装 `requirements-build.lock.txt`，执行 `powershell -NoProfile -File build/build_portable.ps1`。第二份可指定 `-DistPath output/rebuild -WorkPath output/rebuild-work`；用 `build/compare_builds.py` 比较两份 payload。脚本固定 hash seed 和当前源提交的 PE 时间，只作用于构建进程；跨机器/工具版本的可重复性仍需另验。完整 SBOM 是构建/运行依赖超集，静态链接原生子组件审查未完成。

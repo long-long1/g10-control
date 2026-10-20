@@ -40,6 +40,8 @@ VB-CABLE 的命名容易混淆：桥接向播放端 **CABLE Input** 写声音，
 
 ## 环境与依赖
 
+v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便携版运行不需要 Python/Node；开发构建仍需要下列环境。参见[中文便携说明](docs/README-PORTABLE.zh-CN.md)、[本轮版本说明](docs/RELEASE-NOTES.zh-CN.md)和[干净 Windows 验收步骤](docs/ACCEPTANCE-WIN11-X64.md)。项目授权、第三方再分发材料和干净机/硬件验收仍有阻塞。
+
 - Windows 11 x64，具备可用的 BLE 蓝牙适配器。
 - Python 3.12 x64；本机开发依赖版本见 `requirements.txt`。
 - Node.js 20+、npm，用于构建桌面界面。

@@ -429,3 +429,13 @@ G10-AudioBridge.exe  C442F9BC892CF979F003421949EE51E9E686F6EE50C91A6B2639930C65D
 - 损坏应用配置保留原件、使用安全默认值并在 UI/诊断提示；设备配置损坏不阻断桌面导入，重新选择设备时备份原件并撤销兼容性，必须重新验证。只读权限错误不伪装保存成功。
 - 增加 test_failure_recovery 离线矩阵（所有硬件及进程均 fake），覆盖 BLE 断开、身份变化、证明到期、端点变化、配置损坏、启动失败及停止超时；复核向导完成标记实时失效与显式恢复。真实硬件均待执行。
 - 构建/许可/验收脚本与最终结果将在后续阶段补记；本阶段提交 ID 见 Git 记录。
+
+### 阶段二：SBOM、许可审查、验收脚本和构建控制
+
+- 阶段一提交 `7cf68f9`。随后补齐前端状态读取失败撤销旧成功展示：显示“状态未知”、禁止完成配置、保持安全停止入口；不会因 API 失败自动启动业务。后端失效心跳也显示 unknown。
+- requirements-build.lock.txt 固定完整 Windows 构建环境版本（不含 pip，无 wheel 哈希）；stage 对 installed/lock 漂移拒绝生成有效证据。npm 同时核对 lock 与安装版本，未安装平台可选项仍写入 SBOM。
+- stage_beta 生成 CycloneDX 1.6 SBOM、build-evidence（锁文件/spec 哈希、实际 PYZ 模块、原生文件/许可文本 SHA256）和人可读第三方许可证清单。首轮 SBOM 273 组件（34 Python distribution、122 npm lock 项、117 原生文件），72 个实际安装 npm 包；通过官方 1.6 JSON Schema。依赖图/静态链接子组件仍待审，不声称合规完成。
+- 已分类已确认许可义务、待确认和分发阻塞：项目授权未选，pystray LGPL 源码/替换方案未落实；PyWinRT/proxy_tools 文本和 PortAudio、Pillow、WebView2 SDK、NumPy/Python/Tcl/Tk/运行库许可链待核实。redistribution_ready=false。不附外部驱动或 Runtime 安装器。
+- accept_win11.ps1 使用系统 PowerShell、精确核验 manifest 和额外文件、中文/空格隔离副本、System32-only 子进程 PATH、阻塞 data 创建模拟回退，当前进程变量在 finally 恢复；不改 ACL/系统配置、不安装卸载、不做键鼠或 DOM 点击、不强杀。首轮两个 EXE 4/4 安全诊断通过，仅开发机隔离环境；真正干净 VM、缺依赖、只读 ACL 仍待执行。
+- 初始两次独立 clean 构建并非字节一致：仅两个 EXE 和 base_library.zip 不同。进一步检查 EXE 内 archive 各 entry 字节全同，ZIP 成员集合和内容相同、顺序不同；PyInstaller 本地实现明确 PE 时间取 SOURCE_DATE_EPOCH。构建脚本因此固定当前进程 PYTHONHASHSEED=0、SOURCE_DATE_EPOCH=源提交时间并恢复原值；最终独立构建比较结果下一阶段记录，不能用旧比较声称通过。
+- 本轮源码/文档均未写入真实设备身份、路由证明、日志或录音。文档提供中文回退、损坏恢复和诊断隐私说明。最终候选将在这些改动后重新构建/生成。
