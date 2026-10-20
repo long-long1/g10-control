@@ -1,0 +1,12 @@
+{
+  "name": "G10 Control",
+  "version": "0.1.0-beta",
+  "platform": "win11-x64",
+  "intended_license": "MIT",
+  "license_effective": false,
+  "copyright_year": 2026,
+  "copyright_holder": null,
+  "source_ready": false,
+  "binary_ready": false,
+  "release_approved": false
+}

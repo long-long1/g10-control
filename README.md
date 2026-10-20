@@ -4,7 +4,7 @@
 
 已在一台真实 G10 上跑通：**按住红色麦克风键 → BLE / ATVV 音频 → IMA ADPCM 解码 → VB-CABLE → 手动开启的豆包输入法 → 文字**。
 
-> 当前是开发原型，不是安装即用的正式软件。**红键自动唤起豆包仍未成功，按键映射目前仅支持只读检测。** 不同批次遥控器可能使用不同协议，不能仅凭“3K / G10”名称判断兼容。
+> 当前是开发原型，不是安装即用的正式软件。**红键自动唤起豆包仍未成功，源码按键观察仅支持只读检测，冻结版按键观察器不可用。** 不同批次遥控器可能使用不同协议，不能仅凭“3K / G10”名称判断兼容。
 
 ## 功能状态
 
@@ -22,7 +22,7 @@
 | 自动重连、休眠恢复、Windows 安装包 | 未完成 |
 | 开机自启 | 当前用户启动项入口已实现，需用户明确开启；未完成发行级回归 |
 
-桌面外壳实际使用 **Python + pywebview / WebView2 + React / TypeScript**，复用独立 Python 音频服务。Tauri 2 + Rust 是后续可评估的迁移方向，不是当前已实现的技术栈。
+桌面外壳实际使用 **Python + pywebview / WebView2 + React / TypeScript**，复用独立 Python 音频服务。发行继续采用 PyInstaller onedir。
 
 ## 语音链路
 
@@ -40,11 +40,11 @@ VB-CABLE 的命名容易混淆：桥接向播放端 **CABLE Input** 写声音，
 
 ## 环境与依赖
 
-v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便携版运行不需要 Python/Node；开发构建仍需要下列环境。参见[中文便携说明](docs/README-PORTABLE.zh-CN.md)、[本轮版本说明](docs/RELEASE-NOTES.zh-CN.md)和[干净 Windows 验收步骤](docs/ACCEPTANCE-WIN11-X64.md)。项目授权、第三方再分发材料和干净机/硬件验收仍有阻塞。
+v0.1.0 Beta 目前只生成本地验收候选目录，不提供公开 ZIP。便携版运行不需要 Python/Node；开发构建仍需要下列环境。参见[中文便携说明](docs/README-PORTABLE.zh-CN.md)、[本轮版本说明](docs/RELEASE-NOTES.zh-CN.md)和[干净 Windows 验收步骤](docs/ACCEPTANCE-WIN11-X64.md)。MIT 已选定，但版权署名待确认；第三方再分发材料和干净机/硬件验收仍有阻塞。
 
 - Windows 11 x64，具备可用的 BLE 蓝牙适配器。
 - Python 3.12 x64；本机开发依赖版本见 `requirements.txt`。
-- Node.js 20+、npm，用于构建桌面界面。
+- Node.js 26.1.0、npm 11.13.0（本地受控版本），用于构建桌面界面。
 - Microsoft Edge WebView2 Runtime。
 - 用户自行从 [VB-Audio 官方网站](https://vb-audio.com/Cable/) 安装 VB-CABLE，并确认本机设备；仓库不会自动安装驱动。
 - 豆包输入法；当前结论来自本机 0.9.2.7，其他版本需重新验证。
@@ -141,9 +141,10 @@ cd ..\..
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -p "test_*.py" -v
-.\.venv\Scripts\python.exe -m unittest discover -s desktop-ui -p test_runtime.py -v
+.\.venv\Scripts\python.exe -m unittest discover -s desktop-ui -p "test_*.py" -v
 cd desktop-ui\web
 npm ci
+npm test
 npm run build
 ```
 
@@ -162,4 +163,28 @@ npm run build
 
 功能和 ATVV 行为参考 [AxonKey](https://github.com/leowzz/axonkey)，分析版本 `a8c23b98fc6468013c9647a8b27646e5a9821303`。未包含参考仓库、商品照片、第三方程序二进制或反汇编转储。
 
-仓库整体尚未指定开源许可证；第三方依赖分别遵循其许可。详见 [许可状态](LICENSE_STATUS.md) 与 [第三方说明](desktop-ui/THIRD-PARTY-NOTICES.md)。
+所有者已选择 MIT，计划用于有权授权的原创代码、文档及 SVG；版权署名待确认，正式 LICENSE 尚未完成。标准文本见 [MIT 草稿](docs/LICENSE-MIT-DRAFT.txt)，当前不构成生效授权。第三方内容仍遵循其原许可证。详见 [许可状态](LICENSE_STATUS.md) 与 [第三方说明](desktop-ui/THIRD-PARTY-NOTICES.md)。
+
+## 界面展示
+
+暂没有确认可公开的脱敏运行截图。界面源码位于 desktop-ui/web/src，包含状态、设备、设置、日志和首次运行向导；后续截图需人工检查地址、端点身份与本机路径。
+
+## Portable 与首次使用
+
+没有正式下载包；本地候选仅用于验收。步骤见 [中文首次使用说明](docs/README-PORTABLE.zh-CN.md)。用户自行安装官方 VB-CABLE、WebView2 及所需 .NET；程序不自动安装驱动，不修改默认音频设备。设备检查、合成路由测试由用户明确触发；本轮开发不会运行硬件操作。豆包手动选择 CABLE Output 并手动开启语音。
+
+## 常见问题
+
+- 桥接无法启动：当前设备能力证据与本机路由证明必须有效；过期或更换设备后重新验证，不复制他人证明。
+- 缺 WebView2/.NET：按向导从官方渠道手动安装；CI 不证明桌面环境齐全。
+- 关闭后仍运行：窗口关闭默认进入托盘，用托盘安全退出；停止超时保留现场，勿强杀 BLE 进程。
+- 移动后配置异常：查看 UI 显示的数据根；不可写会回退 LocalAppData，自启动路径需用户明确修复。
+- 自动唤起豆包未成功、冻结按键观察器不可用：属于当前已知限制。
+
+## 隐私与本地数据
+
+配置、设备证据、路由证明、向导进度与日志默认保存在本地，便携目录为 data/，不可写回退 LocalAppData。正常桥接不保存录音和识别文本，显式录制诊断需单独授权。项目不主动上传这些数据；豆包等外部软件遵循各自条款。分享日志或截图前人工脱敏，见 [安全政策](SECURITY.md)。
+
+## 贡献与发行状态
+
+见 [贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)、[变更记录](CHANGELOG.md)、[发行门槛](docs/RELEASE-PROCESS.md)。当前 SOURCE_READY=false、BINARY_READY=false，不能从 MIT 的选择推导二进制已获分发许可。
