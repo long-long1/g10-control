@@ -2,7 +2,7 @@
 import argparse
 import asyncio
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import queue
@@ -26,10 +26,27 @@ class AudioBuffer:
         self.lock=threading.Lock();self.chunks=deque();self.offset=0;self.frames=0
         self.active=False;self.playing=False;self.overflows=0;self.underruns=0;self.rendered=0
         self.gate_on_start=gate_on_start;self.gate_open=not gate_on_start
-    def start(self):
+        self.startup={}
+    def start(self,perf_ns=None):
         with self.lock:
             self.chunks.clear();self.frames=0;self.offset=0;self.playing=False;self.active=True
             self.gate_open=not self.gate_on_start
+            self.startup={'start_ns':perf_ns if perf_ns is not None else time.perf_counter_ns(),
+                          'first_audio_ns':None,'first_pcm_ns':None,'first_output_callback_ns':None}
+    def note_audio(self,perf_ns):
+        with self.lock:
+            if self.startup and self.startup['first_audio_ns'] is None:
+                self.startup['first_audio_ns']=perf_ns
+    def startup_snapshot(self):
+        with self.lock:result=dict(self.startup)
+        for label,left,right in (
+            ('start_to_first_audio_ms','start_ns','first_audio_ns'),
+            ('first_audio_to_pcm_ms','first_audio_ns','first_pcm_ns'),
+            ('first_pcm_to_output_callback_ms','first_pcm_ns','first_output_callback_ns'),
+            ('start_to_output_callback_ms','start_ns','first_output_callback_ns')):
+            a,b=result.get(left),result.get(right)
+            result[label]=(b-a)/1e6 if a is not None and b is not None else None
+        return result
     def allow_output(self):
         with self.lock:self.gate_open=True
     def end(self):
@@ -40,6 +57,8 @@ class AudioBuffer:
                 self.overflows+=1
                 raise RuntimeError(f'More than {self.limit/self.rate:.1f}s queued audio; stopping')
             self.chunks.append(mono);self.frames+=len(mono)
+            if len(mono) and self.startup and self.startup['first_pcm_ns'] is None:
+                self.startup['first_pcm_ns']=time.perf_counter_ns()
     def read_into(self,out):
         out.fill(0)
         with self.lock:
@@ -52,6 +71,8 @@ class AudioBuffer:
                 out[position:position+n,:]=chunk[self.offset:self.offset+n,None]
                 position+=n;self.offset+=n;self.frames-=n;self.rendered+=n
                 if self.offset==len(chunk):self.chunks.popleft();self.offset=0
+            if position and self.startup and self.startup['first_output_callback_ns'] is None:
+                self.startup['first_output_callback_ns']=time.perf_counter_ns()
             if position<len(out) and self.active and position:
                 self.underruns+=1;self.playing=False
 
@@ -77,11 +98,12 @@ class LiveDecoder:
         if key==CONTROL:
             if data[:1]==b'\x04':
                 if len(data)<3 or data[2]!=2:raise RuntimeError('Unsupported START for verified G10 profile')
-                self.active=True;self.sessions+=1;self.pending.clear();self.decoder=Decoder(False);self.resampler=Upsample3();self.sink.start()
+                self.active=True;self.sessions+=1;self.pending.clear();self.decoder=Decoder(False);self.resampler=Upsample3();self.sink.start(perf)
                 self.waiting_for_start=False;self.unanchored_since=None
                 self.rec.emit('pcm_session_start',session=self.sessions)
                 for stamp,packet in list(self.orphans):
-                    if abs(perf-stamp)<50_000_000:self.audio(packet)
+                    if abs(perf-stamp)<50_000_000:
+                        self.sink.note_audio(stamp);self.audio(packet)
                 self.orphans.clear()
             elif data[:1]==b'\x00':
                 self.active=False;self.stops+=1;self.last_stop_time=time.monotonic();self.sink.end();self.level=0
@@ -90,7 +112,8 @@ class LiveDecoder:
             elif data[:1]==b'\x0a' and len(data)>=7:
                 self.pending.clear();self.decoder.predictor=int.from_bytes(data[4:6],'big',signed=True);self.decoder.index=min(88,data[6])
         elif key==AUDIO:
-            if self.active:self.audio(data)
+            if self.active:
+                self.sink.note_audio(perf);self.audio(data)
             elif self.last_stop_perf is None or perf-self.last_stop_perf>=300_000_000:
                 self.orphans.append((perf,data));self.unanchored_packets+=1
                 if not self.waiting_for_start:
@@ -112,8 +135,50 @@ class LiveDecoder:
             self.sink.push(output)
 
 class LiveRecorder(Recorder):
-    def __init__(self,path,events):
+    """Bounded asynchronous metadata writer; disk I/O never gates notification dispatch."""
+    def __init__(self,path,events,stop=None):
         super().__init__(path,save_audio=False);self.live_events=events
+        self.log_events=queue.Queue(maxsize=512);self.write_error=None;self.queue_overflow=False;self.stop=stop
+        self.closed=False
+        self.writer=threading.Thread(target=self._write_events,name='BridgeEventWriter',daemon=False)
+        self.writer.start()
+    def emit(self,kind,*,perf_ns=None,unix_ns=None,**fields):
+        # Logging failure stops the bridge but must not throw out of the BLE
+        # finally block: CCCD restoration and resource release still run.
+        if self.write_error is not None or self.queue_overflow:return
+        if self.closed:raise RuntimeError('Event log writer is closed')
+        # Capture at the producer, not when a potentially slow disk catches up.
+        item=(kind,perf_ns if perf_ns is not None else time.perf_counter_ns(),
+              unix_ns if unix_ns is not None else time.time_ns(),fields)
+        try:self.log_events.put_nowait(item)
+        except queue.Full:
+            self.queue_overflow=True;self.errors.append('Event log queue full; stopping, evidence incomplete')
+            if self.stop is not None:self.stop.set()
+    def _write_events(self):
+        while True:
+            item=self.log_events.get()
+            try:
+                if item is None:return
+                if self.write_error is None:
+                    kind,perf,wall,fields=item
+                    row={'kind':kind,'perf_ns':perf,'unix_ns':wall,
+                         'utc':datetime.fromtimestamp(wall/1e9,timezone.utc).isoformat(),
+                         'relative_s':(perf-self.origin)/1e9,**fields}
+                    with self.lock:self.counts[kind]+=1
+                    # Only this thread owns stream writes. Never hold the
+                    # notification/audio-byte lock during a filesystem call.
+                    self.stream.write(json.dumps(row,ensure_ascii=False)+'\n')
+            except Exception as exc:
+                self.write_error=repr(exc);self.errors.append('Event log writer: '+repr(exc))
+                if self.stop is not None:self.stop.set()
+            finally:self.log_events.task_done()
+    def flush(self):
+        self.log_events.join()
+    def close(self):
+        if self.closed:return
+        self.closed=True
+        self.log_events.put(None);self.writer.join()
+        super().close()
     def notification(self,key,data,perf_ns,unix_ns,device_time):
         super().notification(key,data,perf_ns,unix_ns,device_time)
         self.live_events.put_nowait((key,data,perf_ns))
@@ -161,10 +226,11 @@ def main():
     before=defaults()
     events=queue.Queue(maxsize=64);stop=threading.Event();ready=threading.Event();updates=queue.Queue()
     directory=args.output or ROOT/'output'/('g10-live-'+datetime.now().strftime('%Y%m%d-%H%M%S'))
-    rec=LiveRecorder(directory,events);sink=AudioBuffer(max_ms=3000 if args.doubao_ime else 500,gate_on_start=args.doubao_ime);decoder=LiveDecoder(sink,rec,args.verify_session)
+    rec=LiveRecorder(directory,events,stop);sink=AudioBuffer(max_ms=3000 if args.doubao_ime else 500,gate_on_start=args.doubao_ime);decoder=LiveDecoder(sink,rec,args.verify_session)
     decoder.gain_db=args.gain_db
     rec.emit('bridge_config',capture=capture['name'],render=render['name'],profile='G10-128-byte-low-first-IMA-16k',
-             output_rate=48000,raw_audio_saved=False,local_verification_recording=args.verify_session)
+             output_rate=48000,raw_audio_saved=False,local_verification_recording=args.verify_session,
+             metadata_logging='bounded-worker-v1')
     output_status=[];input_status=[];callback_errors=[]
     cable_level=0.;cable_peak=0.;cable_nonzero_frames=0
     def output_callback(outdata,frames,clock,status):
@@ -258,6 +324,11 @@ def main():
             text=f'输入 {20*np.log10(max(decoder.level,1e-6)):.1f} dBFS  |  已处理 {decoder.samples/16000:.2f} 秒  |  已输出 {sink.rendered/48000:.2f} 秒'
             if args.monitor_output:text+=f'\n虚拟麦克风实读 {20*np.log10(max(cable_level,1e-6)):.1f} dBFS'
             level.set(text)
+            startup=sink.startup_snapshot()
+            if startup.get('first_output_callback_ns') is not None and startup['start_ns']!=getattr(tick,'last_startup',None):
+                tick.last_startup=startup['start_ns']
+                rec.emit('audio_startup_timing',session=decoder.sessions,**startup,
+                         boundary='host START callback to PCM copied into output callback; not physical key or DAC time')
             if args.monitor_output and int(time.monotonic()-started)!=getattr(tick,'last_meter_second',None):
                 tick.last_meter_second=int(time.monotonic()-started)
                 rec.emit('cable_output_meter',level=cable_level,peak=cable_peak,nonzero_frames=cable_nonzero_frames,
@@ -279,6 +350,7 @@ def main():
                     'cable_level_dbfs':round(20*np.log10(max(cable_level,1e-6)),1),
                     'cable_peak':round(cable_peak,5),'sessions':decoder.sessions,
                     'error_count':len(rec.errors),'last_error':rec.errors[-1] if rec.errors else None,
+                    'startup_timing':startup,
                 }
                 args.status_path.parent.mkdir(parents=True,exist_ok=True)
                 temporary=args.status_path.with_suffix(args.status_path.suffix+'.tmp')
@@ -304,6 +376,7 @@ def main():
         if decoding:decoding.join()
         if output:output.stop();output.close()
         if input_stream:input_stream.stop();input_stream.close()
+        rec.flush()  # Counts and errors must be complete before building the summary.
         result={'time':datetime.now().astimezone().isoformat(),'sessions':decoder.sessions,'stops':decoder.stops,
                 'pcm_samples_16k':decoder.samples,'forwarded_seconds':decoder.samples/16000,
                 'rendered_frames_48k':sink.rendered,'buffer_overflows':sink.overflows,'buffer_underruns':sink.underruns,
@@ -311,6 +384,7 @@ def main():
                 'errors':rec.errors,'business_writes':rec.counts['tx_attempt'],'audio_notifications':rec.counts['audio'],
                 'audio_bytes':rec.audio_bytes,'default_devices_unchanged':defaults()==before}
         result.update(unanchored_packets=decoder.unanchored_packets,cable_output_peak=cable_peak,cable_output_nonzero_frames=cable_nonzero_frames)
+        result['last_startup_timing']=sink.startup_snapshot()
         if voice:result.update(doubao_sessions_completed=voice.completed,doubao_failures=voice.failures)
         if args.verify_session and decoder.expected and position:
             expected=np.concatenate(decoder.expected)
