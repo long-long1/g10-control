@@ -564,3 +564,13 @@ sbom.cdx.json        3fb41b4c4e0cf3c841905fbda54c8dea2c5efd5620407b17cb4de276ba8
 6. 自动豆包唤起未验证成功、冻结按键观察器不可用；不自动装驱动、不改系统默认设备。这些限制保留。
 
 保护性 diff：相对 82b8fe8，atvv_protocol.py、phase2_handshake.py、phase2_readonly.py、analyze_audio.py、g10_audio_bridge.py、virtual_audio_probe.py、audio_route.py、audio_idle.py 全部未改动。
+
+### 2026-10-20 首次公开 GitHub 预检结果
+
+所有者已在本轮明确授权公开项目源码，并确认 MIT 版权署名为 `Copyright (c) 2026 WYL`。本地 `main` 为 `b3c20a60c98774759b936c8f80d79a8830e8c7be`，工作区预检开始时干净；`origin/main` 为 `8d170a337b12956a5b9bb6382b44b11790f23189`，本地领先 18 个提交、落后 0 个提交，无需覆盖远端历史。GitHub 仓库当前已经是 Public。
+
+固定 AxonKey 参考版本 `a8c23b98fc6468013c9647a8b27646e5a9821303` 的 `THIRD_PARTY_NOTICES.md` 明确指出，RC003 ATVV UUID、麦克风命令、能力解析和 ADPCM 顺序改编自 `xxb26553663-star/remote-bridge-hub` 的 `GPL-3.0-only` 项目；本项目 `atvv_protocol.py`、`phase2_handshake.py` 与协议文档仍标记为 source-derived / RC003-derived，且 `docs/SOURCE-PROVENANCE.md` 已记载来源边界未核清。前次预检因此暂停推送。所有者随后明确表示知悉此 GPL 来源疑点，并授权在保留声明和未解决风险记录的前提下同步源码；本次同步不表示相关代码已获 MIT 重新授权，也不表示许可审查完成。不得把该代码默认为 MIT，也不得通过改写表述或重写历史来规避。后续如确认包含未经授权且不能公开的第三方代码，应停止进一步分发并由权利人确认授权/兼容许可，或透明处理独立实现并重新审查完整待推送历史。
+
+对 `origin/main..main` 的 18 个提交及其新增文件历史执行了隐私/敏感模式和文件类型筛查，189 个唯一文本 blob 完成内容模式扫描。命中包括测试中的占位 MAC 样式值（`11:22:33:44:55:66`、`AA:BB:CC:DD:EE:FF`）、交接文档中描述性的本机路由证明路径，以及旧版 `docs/PORTABLE_HANDOFF.md` 中的工作区绝对路径（本节称为 `<workspace absolute path>`）。该值不是用户配置目录，也未包含账户名；项目路径由所有者在本轮明确提供并授权公开。当前版本已将该处泛化，旧提交仍保留原值；本轮不改写历史。未发现个人设备地址、凭据/令牌/密码、实际 route-proof 数据、录音或日志文件。新增历史文件中有一个 `pystray-0.19.5.tar.gz` 源码归档，无超过 5 MiB 的文件，也无 EXE、ZIP、DLL、PDB、音频或日志构建产物。当前 Actions 仅运行离线检查并在临时 runner 工作区构建/暂存候选；权限为 `contents: read`，无 artifact 上传、Release、发布凭据或真实硬件步骤。
+
+仓库已为 Public；本地 `main` 初始领先远端 18 个提交、落后 0 个提交。所有者本轮明确提供项目目录并授权公开源码，因此旧版交接文档中未含账户名的工作区路径属于已知披露内容；当前文档已将其泛化。推送完成后的 GitHub 最新提交 ID、MIT LICENSE 可见性和最终 ahead/behind 结果将在下方追记。本轮不发布 EXE/ZIP，不创建 Release。
