@@ -88,7 +88,7 @@ PyInstaller `onedir`（建议先 `--onedir --noconfirm --clean`，后续固定 `
 
 ## 6. 测试基线（本次真实执行）
 
-执行环境：Windows 工作区 `E:\working\yaokong\g10-control`；全局 Python `3.12.10`、Node `v26.1.0`、npm `11.13.0`。本仓库没有 `.venv`，当前全局 Python 未安装 `requirements.txt` 中的全部依赖。`desktop-ui/web/node_modules` 可用。
+执行环境：Windows 工作区 `<workspace>`；全局 Python `3.12.10`、Node `v26.1.0`、npm `11.13.0`。本仓库没有 `.venv`，当前全局 Python 未安装 `requirements.txt` 中的全部依赖。`desktop-ui/web/node_modules` 可用。
 
 | 命令 | 真实结果 | 解释 |
 |---|---|---|

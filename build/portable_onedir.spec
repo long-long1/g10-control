@@ -1,11 +1,20 @@
 # Local onedir build. Hardware/new-machine acceptance is still required.
 from pathlib import Path
+import os
 from PyInstaller.utils.hooks import collect_submodules
 
 SPEC_DIR = Path(SPECPATH).resolve()
 if SPEC_DIR.is_file():
     SPEC_DIR = SPEC_DIR.parent
 ROOT = SPEC_DIR.parent
+# Explicit opt-in for a user's modified LGPL library during recombination.
+# Default builds use only the locked environment. Never alter installed files.
+PYSTRAY_PATHS = []
+if os.environ.get('G10_BUILD_PYSTRAY_SOURCE'):
+    library = Path(os.environ['G10_BUILD_PYSTRAY_SOURCE']).resolve() / 'lib'
+    if not (library / 'pystray' / '__init__.py').is_file():
+        raise SystemExit('Modified pystray source must contain lib/pystray/__init__.py')
+    PYSTRAY_PATHS.append(str(library))
 WEB_DIST = ROOT / "desktop-ui" / "web" / "dist"
 if not (WEB_DIST / "index.html").is_file():
     raise SystemExit("Build desktop-ui/web first: npm ci && npm run build")
@@ -28,7 +37,7 @@ def windows_audio_only(entries):
             or Path(entry[0]).name.lower() == 'libportaudio64bit.dll']
 main_analysis = Analysis(
     [str(ROOT / "desktop-ui" / "control_entry.py")],
-    pathex=[str(ROOT), str(ROOT / "desktop-ui")],
+    pathex=PYSTRAY_PATHS + [str(ROOT), str(ROOT / "desktop-ui")],
     binaries=[],
     datas=[(str(WEB_DIST), "web/dist")],
     hiddenimports=common_hiddenimports + ["webview", "pystray", "PIL"],
@@ -61,7 +70,7 @@ main_exe = EXE(
 
 bridge_analysis = Analysis(
     [str(ROOT / "bridge_entry.py")],
-    pathex=[str(ROOT)],
+    pathex=PYSTRAY_PATHS + [str(ROOT)],
     binaries=[],
     datas=[],
     hiddenimports=common_hiddenimports + ["sounddevice", "_sounddevice_data"],

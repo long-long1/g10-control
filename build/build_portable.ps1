@@ -1,4 +1,4 @@
-param([string]$DistPath = 'dist', [string]$WorkPath = 'build')
+param([string]$DistPath = 'dist', [string]$WorkPath = 'build', [string]$PystraySource = '')
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $python = Join-Path $repoRoot '.venv\Scripts\python.exe'
@@ -24,7 +24,11 @@ try {
 Push-Location $repoRoot
 $savedHashSeed = $env:PYTHONHASHSEED
 $savedEpoch = $env:SOURCE_DATE_EPOCH
+$savedPystraySource = $env:G10_BUILD_PYSTRAY_SOURCE
 try {
+    # Explicit local recombination input; default build ignores ambient overrides.
+    $env:G10_BUILD_PYSTRAY_SOURCE = $null
+    if ($PystraySource) { $env:G10_BUILD_PYSTRAY_SOURCE = (Resolve-Path -LiteralPath $PystraySource).Path }
     # Reproducible interpreter ordering and PE timestamps; current process only.
     $env:PYTHONHASHSEED = '0'
     $epoch = & git show -s --format=%ct HEAD
@@ -35,6 +39,7 @@ try {
 } finally {
     $env:PYTHONHASHSEED = $savedHashSeed
     $env:SOURCE_DATE_EPOCH = $savedEpoch
+    $env:G10_BUILD_PYSTRAY_SOURCE = $savedPystraySource
     Pop-Location
 }
 

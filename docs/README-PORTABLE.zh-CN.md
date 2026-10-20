@@ -1,3 +1,5 @@
+> 第七轮：主项目已选择 MIT，但版权署名待确认；候选只有 MIT 草稿。第三方许可审查未完成，禁止对外分发。见 LICENSE_STATUS.md、LGPL-PYSTRAY.md、RELEASE-PROCESS.md。
+
 # G10 Control v0.1.0 Beta 候选版使用说明
 
 当前目录只供本地验收。项目整体许可证和第三方再分发材料尚未完成，不能对外分发此目录或制作公开 ZIP/Release。

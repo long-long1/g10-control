@@ -51,3 +51,7 @@ WebView2 / VB-CABLE 缺失：当前只执行 `test_failure_recovery` 的依赖�
 - [ ] PyWinRT、proxy_tools、PortAudio 缺失文本补齐并对应版本；WebView2 SDK/Loader 和其他 native 条款核验。
 - [ ] NumPy/OpenBLAS/LAPACK/运行库、Python/Tcl/Tk、PyInstaller bootloader exception 等材料核对。
 - [ ] 隐私、限制、测试范围与支持渠道审阅后，单独授权对外 ZIP/Release。
+
+## 第七轮补充门槛
+
+MIT 署名、第三方审查、LGPL 重组材料、干净机、真实 G10 能力/语音/异常退出、隐私和所有者批准均需逐项证据；见 RELEASE-PROCESS.md。离线扫描成功不能替代这些验收。
