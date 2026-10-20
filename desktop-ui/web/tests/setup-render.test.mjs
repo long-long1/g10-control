@@ -35,6 +35,16 @@ test('environment errors, actual data directory and fallback remain visible',()=
  for(const text of ['X:/Portable/data','LocalAppData','权限不足','WebView2','请手动安装'])assert.ok(html.includes(text));
 });
 
+test('revoked gates disable completion and retain return navigation',()=>{
+ for(const index of [0,1,2,3]){
+  const s=state(4);s.setup.ready=false;s.setup.statuses=Array(5).fill('passed');s.setup.statuses[index]='failed';
+  const html=render(s);
+  assert.match(html,/尚有关键检查未通过/);
+  assert.match(html,/button[^>]*disabled=""[^>]*>完成配置/);
+  assert.match(html,/上一步/);assert.doesNotMatch(html,/配置已完成。/);
+ }
+});
+
 const homeCode=buildSync({entryPoints:[fileURLToPath(new URL('../src/App.tsx',import.meta.url))],bundle:true,write:false,platform:'node',format:'cjs',external:['react','react/jsx-runtime']}).outputFiles[0].text;
 const homeModule={exports:{}};
 new Function('require','module','exports',homeCode)(require,homeModule,homeModule.exports);

@@ -50,6 +50,7 @@ class Application:
     def get_status(self):
         state = self._supervisor.snapshot()
         state['settings'] = self._store.load()
+        state['settings_warning'] = self._store.warning
         state['runtime'] = {'log_directory': str(self._supervisor.logs),
                             'service_log_directory': str(self._supervisor.run_dir) if self._supervisor.run_dir else None}
         state['shell'] = {'key_observer_available': not PATHS.frozen and PYTHON_PATH.is_file() and not getattr(self, '_nonbusiness', False),

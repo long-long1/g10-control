@@ -254,6 +254,7 @@ export default function App(){
       </div>
       <footer className="statusbar"><div><span className="status-dot good"/>本地运行 <span className="status-sep">·</span> 蓝牙、语音与按键数据不会上传</div><div>G10 Control <span className="status-sep">·</span> v{state.application.version}</div></footer>
       {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
+      {state.settings_warning&&<div className="host-warning" role="alert">{state.settings_warning}</div>}
       {!connectedToHost&&<div className="host-warning"><CircleHelp size={16}/>桌面服务尚未连接，当前为界面预览，不执行检测。</div>}
     </main>
   </div>;

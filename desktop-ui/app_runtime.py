@@ -25,8 +25,12 @@ from device_setup import DeviceSetup
 from onboarding import SetupWizard
 from local_config import address, cable_capture_id, require_address, require_cable_capture_id
 PATHS = runtime_paths()
-CABLE_ID = cable_capture_id()
-G10_ADDRESS = address()
+try:
+    CABLE_ID = cable_capture_id()
+    G10_ADDRESS = address()
+except (OSError, ValueError, TypeError, AttributeError):
+    # Invalid identity must not prevent the recovery UI from importing.
+    CABLE_ID, G10_ADDRESS = '', ''
 G10_NAME = 'G10'
 
 def _app_data() -> Path:
@@ -64,12 +68,14 @@ class SettingsStore:
 
     def load(self) -> dict:
         with self.lock:
+            self.warning = None
             if not self.path.exists():
                 return default_settings()
             try:
                 loaded = json.loads(self.path.read_text(encoding='utf-8'))
                 return normalize_settings(loaded)
             except (OSError, ValueError, TypeError):
+                self.warning = '应用设置无法读取，当前使用安全默认值；原文件保留。请在软件设置中导出诊断、重试读取或恢复默认设置。'
                 return default_settings()
 
     def save(self, value: dict) -> dict:
@@ -219,15 +225,19 @@ class BridgeSupervisor:
                 backend = json.loads(self.status_path.read_text(encoding='utf-8'))
         except (OSError, ValueError):
             backend = {}
+        if not isinstance(backend, dict):
+            backend = {}
         running = bool(proc and proc.poll() is None)
-        stale = not backend or time.time() - _timestamp(backend.get('time')) > 4
+        age = time.time() - _timestamp(backend.get('time'))
+        stale = not backend or not 0 <= age <= 4
+        live_audio = running and not stale and backend.get('connected') is True and backend.get('audio_active') is True
         if not running:
             connection = 'stopped'
-            detail = self.last_message or '服务已停止'
+            detail = ('蓝牙服务异常退出，请查看诊断后手动重试。' if proc and proc.returncode else self.last_message or '服务已停止')
         elif stale:
             connection = 'starting'
-            detail = '正在连接 G10…'
-        elif backend.get('connected'):
+            detail = '尚未收到有效服务心跳，请查看状态或安全停止后手动重试。'
+        elif backend.get('connected') is True:
             connection = 'connected'
             detail = 'G10 已连接，ATVV 音频通知已就绪'
         else:
@@ -241,22 +251,22 @@ class BridgeSupervisor:
                       'fallback_reason': self.paths.fallback_reason},
             'service': {'running': running, 'connection': connection, 'detail': detail,
                         'started_at': self.started_at,
-                        'audio_active': bool(backend.get('audio_active')),
+                        'audio_active': live_audio,
                         'processed_audio_seconds': backend.get('processed_audio_seconds', 0),
-                        'input_level_dbfs': backend.get('input_level_dbfs', -120),
-                        'cable_level_dbfs': backend.get('cable_level_dbfs', -120),
-                        'cable_peak': backend.get('cable_peak', 0),
+                        'input_level_dbfs': backend.get('input_level_dbfs', -120) if live_audio else -120,
+                        'cable_level_dbfs': backend.get('cable_level_dbfs', -120) if live_audio else -120,
+                        'cable_peak': backend.get('cable_peak', 0) if live_audio else 0,
                         'error_count': backend.get('error_count', 0),
                         'error': backend.get('last_error')},
             'device_setup': self.devices.snapshot(),
             'device': {'name': (self.devices.snapshot()['selected'] or {}).get('name') or '未选择设备',
-                       'address': address(), 'transport': 'Bluetooth LE',
+                       'address': _display_address(), 'transport': 'Bluetooth LE',
                        'vid': None, 'pid': None, 'battery': None},
             'audio_route': route,
             'setup': self.wizard.snapshot(),
             'microphone': {'name': capture.get('name', 'CABLE Output (VB-Audio Virtual Cable)'),
                            'id': capture.get('id', ''),
-                           'validated': route['validated'], 'is_active': bool(backend.get('audio_active'))},
+                           'validated': route['validated'], 'is_active': live_audio},
         }
 
     def logs_tail(self, limit: int = 80) -> list[dict]:
@@ -271,6 +281,8 @@ class BridgeSupervisor:
 
     def export_diagnostics(self) -> dict:
         state = self.snapshot()
+        self.settings.load()
+        state['settings_warning'] = self.settings.warning
         # Notification payloads are not present in the event log. HID data is only
         # available through the opt-in Raw Input monitor and can be reviewed locally.
         return {'generated_at': datetime.now().astimezone().isoformat(), 'state': state,
@@ -290,5 +302,12 @@ def _timestamp(value) -> float:
         return 0
     try:
         return datetime.fromisoformat(value).timestamp()
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError, OSError):
         return 0
+
+
+def _display_address():
+    try:
+        return address()
+    except (ValueError, TypeError, AttributeError, OSError):
+        return ''

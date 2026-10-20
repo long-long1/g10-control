@@ -19,7 +19,12 @@ def _value(key,environment):
     value=os.environ.get(environment)
     if value is not None:return value.strip()
     if not CONFIG.exists():return ''
-    data=json.loads(CONFIG.read_text(encoding='utf-8-sig'))
+    try:
+        data=json.loads(CONFIG.read_text(encoding='utf-8-sig'))
+        if not isinstance(data,dict):return ''
+    except (OSError,ValueError):
+        # Fail closed; DeviceSetup reports corruption without replacing the file.
+        return ''
     value=data.get(key,'')
     if not isinstance(value,str):raise ValueError(f'{key} must be a string')
     return value.strip()

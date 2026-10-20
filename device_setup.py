@@ -115,7 +115,9 @@ class DeviceSetup:
     def _load(self):
         try:
             value = json.loads(self.path.read_text(encoding='utf-8-sig'))
-            return value if isinstance(value, dict) else {}
+            if not isinstance(value, dict):
+                raise ValueError('expected an object')
+            return value
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as exc:
@@ -201,7 +203,14 @@ class DeviceSetup:
             rows = [row for row in self.candidates if row['id'] == identity]
             if len(rows) != 1:
                 raise ValueError('请从当前扫描列表中选择唯一设备。')
-            data = self._load()
+            try:
+                data = self._load()
+            except RuntimeError:
+                # Explicit selection recovers identity; preserve corrupt input.
+                backup = self.path.with_name(self.path.name + '.corrupt-' + datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f'))
+                with backup.open('xb') as handle:
+                    handle.write(self.path.read_bytes())
+                data = {}
             data.update(bluetooth_address=rows[0]['address'], selected_device=rows[0], device_compatibility={})
             self._save(data)
             self.state, self.message = 'selected', '设备已保存，兼容性尚未验证。'

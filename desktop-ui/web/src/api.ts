@@ -11,6 +11,7 @@ export type BleCandidate = {id:string;address:string;name:string;advertised_serv
 export type DeviceSetupStatus = {state:string;message:string;selected:BleCandidate|null;compatible:boolean;candidates:BleCandidate[];busy:boolean};
 export type SetupStatus = {step:number;completed:boolean;ready:boolean;statuses:string[];environment:{name:string;passed:boolean;detail:string}[];data_directory:string;portable:boolean;fallback_reason:string|null};
 export type Snapshot = {
+  settings_warning?: string|null;
   application: { name: string; version: string; single_instance: boolean };
   service: { running:boolean; connection:'stopped'|'starting'|'connected'; detail:string; started_at:string|null; audio_active:boolean; processed_audio_seconds:number; input_level_dbfs:number; cable_level_dbfs:number; cable_peak:number; error_count:number; error:string|null };
   device: { name:string; address:string; transport:string; vid:string|null; pid:string|null; battery:number|null };
