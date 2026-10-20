@@ -32,7 +32,8 @@ class ReleaseEvidenceTests(unittest.TestCase):
             'bundled_namespace_match': True, 'declared_license': 'MIT', 'missing_license_text': False}], 'npm': []}
 
     def run_evidence(self):
-        with patch('build.release_evidence.metadata.distributions', return_value=[self.dist]):
+        with patch('build.release_evidence.metadata.distributions', return_value=[self.dist]), \
+                patch('build.release_evidence.subprocess.check_output', side_effect=[b'\0', 'test-source-commit\n']):
             return write_evidence(self.root, self.target, self.inventory, {'example'})
 
     def test_sbom_native_hash_and_uninstalled_lock_entry_preserved(self):

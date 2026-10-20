@@ -439,3 +439,41 @@ G10-AudioBridge.exe  C442F9BC892CF979F003421949EE51E9E686F6EE50C91A6B2639930C65D
 - accept_win11.ps1 使用系统 PowerShell、精确核验 manifest 和额外文件、中文/空格隔离副本、System32-only 子进程 PATH、阻塞 data 创建模拟回退，当前进程变量在 finally 恢复；不改 ACL/系统配置、不安装卸载、不做键鼠或 DOM 点击、不强杀。首轮两个 EXE 4/4 安全诊断通过，仅开发机隔离环境；真正干净 VM、缺依赖、只读 ACL 仍待执行。
 - 初始两次独立 clean 构建并非字节一致：仅两个 EXE 和 base_library.zip 不同。进一步检查 EXE 内 archive 各 entry 字节全同，ZIP 成员集合和内容相同、顺序不同；PyInstaller 本地实现明确 PE 时间取 SOURCE_DATE_EPOCH。构建脚本因此固定当前进程 PYTHONHASHSEED=0、SOURCE_DATE_EPOCH=源提交时间并恢复原值；最终独立构建比较结果下一阶段记录，不能用旧比较声称通过。
 - 本轮源码/文档均未写入真实设备身份、路由证明、日志或录音。文档提供中文回退、损坏恢复和诊断隐私说明。最终候选将在这些改动后重新构建/生成。
+
+### 阶段三：最终本地候选与回归结果
+
+阶段二提交 `84c7199`；本节及生成器来源哈希补充随最后一次文档/证据提交进入 Git（确切 ID 见 git log 与最终报告）。冻结业务/UI 源码基于 `84c7199`；stage 还记录逐个源码输入哈希，不把提交号当作未修改工作树的保证。
+
+| 检查 | 实际结果 | 本机证据（忽略、不提交） |
+| --- | --- | --- |
+| 根目录 unittest | **100/100**，无错误/失败/跳过 | output/offline-final-root-tests.log |
+| 桌面 unittest | **45/45**，无错误/失败/跳过 | output/offline-final-desktop-tests.log |
+| 前端状态/实际组件渲染 | **12/12**，含 API 失败撤销成功、unknown 时安全停止、向导返回与禁止完成 | npm test 的本轮实际输出 |
+| TypeScript/Vite | 成功；第二次 npm ci / build 相同资源 | output/offline-final-build.log、offline-final-rebuild.log |
+| PyInstaller clean onedir | 最终两次均成功；此前排查两次也成功 | 同上及 output/offline-build-first.log、offline-build-second.log |
+| 同机可重复性 | **1,086/1,086 payload 文件 SHA256 完全相同**，无增加/删除/差异 | output/offline-final-reproducibility.json |
+| 最终 EXE 安全启动 | **4/4**，两个 EXE 在中文/空格目录及数据写入失败回退，退出 0、ok=true、business_started=false；无残留 G10 进程 | output/offline-final-exe.log、output/offline-final-exe-acceptance/ |
+| SBOM 官方 schema | CycloneDX 1.6 JSON Schema 验证通过（仅结构，不是完整性/法律认证） | output/offline-final-sbom-schema.log、output/sbom-schema/ |
+| 候选清单与隐私 | **1,274 文件**；manifest **1,273 条**全部校验一致（不含自身）；data 空，20 个已知身份/开发路径字节模式无命中；两个 EXE 各 880 PYZ 模块，无已知敏感命中/自身测试模块；仅一份非 ASIO x64 PortAudio | 候选 package-audit.json、manifest.json |
+| 前端内容一致性 | web/dist 与包内 _internal/web/dist 逐文件哈希一致；最终 JS index-BXb4oLcb.js | 候选文件与源构建产物 |
+
+最终候选：`dist/G10-Control-v0.1.0-Beta-offline-final-win64`（忽略、不提交）。早期 rc2 是排查样本，请以 offline-final 为本轮结果。未生成或公开 ZIP、未上传/推送 Release。
+
+```text
+G10-Control.exe      480fe37b02fcd98cbdfba688d1819741333fd0478215e3d690e77fae977afaca
+G10-AudioBridge.exe  e1f437184d6db463769d4c0e0e26f679b197f95ce746298522c013a4f65a9a8d
+```
+
+SBOM 共 **273 组件**：34 Python distribution、122 npm lock 项（72 实际安装包）、117 原生文件。实际 namespace 包含 pystray 0.19.5/LGPLv3、pywebview 6.2.1/BSD、pythonnet 3.2.1/MIT、sounddevice 0.5.6/MIT、Pillow 13.0.0/MIT-CMU 及 WinRT；其原生静态依赖不能仅靠 Python 声明覆盖。完整许可文件缺失清单为 proxy_tools 和 9 个 winrt-* distribution；其余原生归属和 LGPL 应用材料仍待核验。人可读清单见候选 THIRD-PARTY-LICENSES.md，已收集文本带独立 SHA256。
+
+最终构建警告仍只有 pycparser 可选 lextab/yacctab 显式 hidden import 未找到；冻结诊断已通过 cffi/pycparser、Windows Bleak/WinRT 导入及内存运算，不创建 watcher 或音频流。其他 warn-control/warn-bridge 的跨平台/类型模块沿用第 11/13 节分类，不据此宣称硬件路径验收通过。上一轮 hook 原生退出根因仍未定位；本轮多次成功不等于解释了该历史故障。
+
+### 必须保留的未完成/阻塞
+
+1. **没有干净 Windows 11 VM**。无 Python/Node/开发目录、真实只读 ACL、真实缺 WebView2/.NET/VB-CABLE 场景均待执行；System32-only PATH 和文件阻塞仅是开发机隔离模拟。提供安全脚本与中文步骤，没有卸载软件/修改 ACL 制造缺失。
+2. **没有执行任何真实硬件操作**：BLE 扫描、连接、GATT、麦克风会话、真实音频、系统音频设置、键鼠模拟及管理员操作均未运行。前轮 VB-CABLE 合成证明不带入新候选。新的首次配置/断线恢复真实行为仍需用户回来后单独授权验收。
+3. **法律审查未完成**。项目整体授权、pystray LGPL 源码/替换方案、缺失文本和 native 许可链仍阻塞分发；未选择项目许可证，redistribution_ready=false。
+4. 可重复性只在本机相同 Python/Node/依赖及相同源提交时间控制下验证；未验证跨机器/不同工具链，也未加入 wheel 内容哈希供应链锁。初始差异报告保留，最终通过结论只适用于受控两次构建。
+5. 手动开启豆包语音输入的限制保留；自动唤起未通过、冻结按键观察器不可用。异常不自动重连、不强杀桥接。诊断可能含设备身份和本机路径，分享前须检查。
+
+保护性核对：相对开工 9623cc9，`atvv_protocol.py`、`phase2_handshake.py`、`phase2_readonly.py`、`analyze_audio.py`、`g10_audio_bridge.py`、`virtual_audio_probe.py` 均无改动。真实路由/配置/日志/录音全部留在被忽略的本机位置，不进入本轮提交或候选。

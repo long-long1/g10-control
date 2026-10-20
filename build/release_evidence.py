@@ -8,6 +8,7 @@ from importlib import metadata
 import json
 from pathlib import Path
 import re
+import subprocess
 from urllib.parse import quote
 
 
@@ -92,6 +93,13 @@ def write_evidence(root, target, inventory, modules):
                 'license_texts': [{'path': f.relative_to(target).as_posix(), 'sha256': sha256(f)}
                                  for f in sorted((target / 'licenses').rglob('*')) if f.is_file()],
                 'redistribution_ready': False}
+    # No absolute build-machine paths or private runtime inputs in the record.
+    tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode('utf-8').split('\0')
+    evidence['source_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+    evidence['source_inputs'] = {name: sha256(root / name) for name in sorted(tracked)
+                                 if name and (root / name).is_file() and
+                                 (name.endswith(('.py', '.ts', '.tsx', '.css', '.spec')) or name in
+                                  {'desktop-ui/web/index.html', 'desktop-ui/web/package.json'})}
     for name, value in [('sbom.cdx.json', bom), ('build-evidence.json', evidence)]:
         (target / name).write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     lines = ['# Third-party license inventory', '',
