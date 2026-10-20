@@ -149,8 +149,9 @@ def main():
     p.add_argument('--output',type=Path)
     args=p.parse_args()
     if not args.business_approval or not args.allow_cccd:p.error('Prior ATVV and CCCD approval required')
-    from local_config import require_address
+    from local_config import require_address, paired_device_id
     args.address=require_address()
+    args.device_id=paired_device_id(args.address)
     if not -30.0<=args.gain_db<=30.0:p.error('--gain-db must be in range -30 to +30')
     args.ready_message='请在应用中选择 CABLE Output (VB-Audio Virtual Cable)，然后按住红键说话。'
     capture,render=select_verified_pair()

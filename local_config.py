@@ -40,6 +40,28 @@ def normalize_address(value):
 def address():return normalize_address(_value('bluetooth_address','G10_BLUETOOTH_ADDRESS'))
 
 
+def paired_device_id(explicit_address=None):
+    """Return the saved Windows BLE device ID only for the matching paired address."""
+    target = normalize_address(explicit_address) if explicit_address is not None else address()
+    if not target or not CONFIG.exists():
+        return ''
+    try:
+        data = json.loads(CONFIG.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        return ''
+    if not isinstance(data, dict):
+        return ''
+    selected = data.get('selected_device')
+    if not isinstance(selected, dict) or selected.get('paired') is not True:
+        return ''
+    try:
+        selected_address = normalize_address(str(selected.get('address') or ''))
+    except ValueError:
+        return ''
+    device_id = selected.get('winrt_device_id')
+    return device_id if selected_address == target and isinstance(device_id, str) else ''
+
+
 def require_address(explicit=None):
     value=normalize_address(explicit) if explicit is not None else address()
     if not value or value=='000000000000':

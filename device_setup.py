@@ -1,6 +1,7 @@
 """Explicit BLE discovery and capability-only checking using the existing transport."""
 import asyncio
 from datetime import datetime, timedelta, timezone
+import re
 import json
 from pathlib import Path
 import queue
@@ -12,17 +13,144 @@ from local_config import normalize_address, config_path, address as active_addre
 from phase2_handshake import Controller
 
 PROFILE = 'atvv-g10-128-v1'
+AEP_DEVICE_ADDRESS = 'System.Devices.Aep.DeviceAddress'
+AEP_IS_CONNECTED = 'System.Devices.Aep.IsConnected'
+AEP_IS_PRESENT = 'System.Devices.Aep.IsPresent'
+
+
+def _address_from_device_id(device_id):
+    """Fallback for Windows IDs that embed the peer Bluetooth address."""
+    match = re.search(r'(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}', str(device_id or ''))
+    if not match:
+        return ''
+    try:
+        return normalize_address(match.group(0))
+    except ValueError:
+        return ''
+
+
+async def enumerate_paired_devices():
+    """Read Windows' paired BLE identities without scanning for advertisements."""
+    from winrt.windows.devices.bluetooth import BluetoothLEDevice
+    from winrt.windows.devices.enumeration import DeviceInformation
+
+    selector = BluetoothLEDevice.get_device_selector_from_pairing_state(True)
+    devices = await asyncio.wait_for(
+        DeviceInformation.find_all_async_aqs_filter_and_additional_properties(
+            selector, [AEP_DEVICE_ADDRESS, AEP_IS_CONNECTED, AEP_IS_PRESENT]),
+        20)
+    result, unresolved = [], 0
+    for device in devices:
+        properties = device.properties
+        address_value = properties.get(AEP_DEVICE_ADDRESS)
+        try:
+            address = normalize_address(str(address_value or '')) if address_value else ''
+        except ValueError:
+            address = ''
+        address = address or _address_from_device_id(device.id)
+        if not address or address == '000000000000':
+            unresolved += 1
+            continue
+        connected = properties.get(AEP_IS_CONNECTED)
+        present = properties.get(AEP_IS_PRESENT)
+        result.append({
+            'id': address,
+            'address': address,
+            'name': str(device.name or ''),
+            'advertised_services': [],
+            'paired': True,
+            'connected': bool(connected) if connected is not None else None,
+            'present': bool(present) if present is not None else None,
+            'winrt_device_id': str(device.id),
+            'name_source': 'windows' if device.name else '',
+        })
+    warnings = []
+    if unresolved:
+        warnings.append(f'Windows 返回了 {unresolved} 个已配对 BLE 设备，但未提供可关联的蓝牙地址。')
+    return result, warnings
+
+
+def merge_device_candidates(paired, advertisements):
+    """Merge Windows pairing identities and transient Bleak advertisement rows by address."""
+    merged = {}
+    for row in paired:
+        address = normalize_address(str(row.get('address') or ''))
+        if not address or address == '000000000000':
+            continue
+        item = dict(row)
+        item.update(id=address, address=address, paired=True)
+        item['advertised_services'] = list(item.get('advertised_services') or [])
+        item['name'] = str(item.get('name') or '')
+        item['name_source'] = item.get('name_source') or ('windows' if item['name'] else '')
+        previous = merged.get(address)
+        if previous:
+            services = sorted(set(previous['advertised_services'] + item['advertised_services']))
+            preferred = item if item.get('connected') is True and previous.get('connected') is not True else previous
+            if not preferred['name']:
+                other = item if preferred is previous else previous
+                preferred['name'], preferred['name_source'] = other['name'], other['name_source']
+            if not preferred.get('winrt_device_id'):
+                other = item if preferred is previous else previous
+                preferred['winrt_device_id'] = other.get('winrt_device_id', '')
+            if preferred.get('connected') is None:
+                other = item if preferred is previous else previous
+                preferred['connected'] = other.get('connected')
+            if preferred.get('present') is None:
+                other = item if preferred is previous else previous
+                preferred['present'] = other.get('present')
+            preferred['advertised_services'] = services
+            merged[address] = preferred
+        else:
+            merged[address] = item
+    for row in advertisements:
+        try:
+            address = normalize_address(str(row.get('address') or ''))
+        except ValueError:
+            continue
+        if not address or address == '000000000000':
+            continue
+        item = merged.get(address)
+        adv_name = str(row.get('name') or '')
+        services = [str(value).lower() for value in row.get('advertised_services', [])]
+        if item is None:
+            merged[address] = {
+                'id': address, 'address': address, 'name': adv_name,
+                'advertised_services': services, 'paired': False,
+                'connected': None, 'present': True, 'winrt_device_id': '',
+                'name_source': 'advertisement' if adv_name else '',
+            }
+            continue
+        item['advertised_services'] = sorted(set(item['advertised_services'] + services))
+        item['present'] = True
+        if not item['name'] and adv_name:
+            item['name'] = adv_name
+            item['name_source'] = 'advertisement'
+    return sorted(merged.values(), key=lambda row: (
+        not (row['paired'] and 'g10' in row['name'].casefold()),
+        row['connected'] is not True,
+        not row['paired'],
+        row['name'].casefold(),
+        row['address']))
 
 
 async def scan_candidates():
-    from bleak import BleakScanner
-    found = await BleakScanner.discover(timeout=5, return_adv=True)
-    result = []
-    for device, adv in found.values():
-        address = normalize_address(device.address)
-        result.append({'id': address, 'address': address, 'name': adv.local_name or device.name or '',
-                       'advertised_services': [str(value).lower() for value in adv.service_uuids]})
-    return result
+    warnings = []
+    try:
+        paired, warnings = await enumerate_paired_devices()
+    except Exception as exc:
+        paired = []
+        warnings = [f'Windows 已配对设备列表读取失败：{exc}']
+    advertisements = []
+    try:
+        from bleak import BleakScanner
+        found = await BleakScanner.discover(timeout=5, return_adv=True)
+        for device, adv in found.values():
+            address = normalize_address(device.address)
+            advertisements.append({'address': address, 'name': adv.local_name or device.name or '',
+                                   'advertised_services': [str(value).lower() for value in adv.service_uuids]})
+    except Exception as exc:
+        warnings.append(f'BLE 广播扫描失败；仍显示 Windows 配对列表：{exc}')
+    return {'candidates': merge_device_candidates(paired, advertisements), 'warnings': warnings}
 
 
 class CapabilityOnly(Controller):
@@ -70,16 +198,20 @@ class _Evidence:
 
 
 async def check_candidate(candidate):
-    # The proven transport deliberately requires a Windows-paired G10 name and
-    # exact address. Do not broaden that hardware boundary silently.
-    if candidate['name'] != 'G10':
-        raise RuntimeError('现有受控传输仅支持 Windows 已配对且名称为 G10 的候选设备；名称本身不代表兼容。')
+    # Names and advertisement hints are optional labels. Resolve the peer via
+    # Windows' paired identity, then let live GATT/capability evidence decide.
+    if candidate.get('paired') is not True:
+        raise RuntimeError('此项仅来自 BLE 广播，尚未关联到 Windows 已配对设备；请先在 Windows 蓝牙设置中配对，再扫描。')
+    if not candidate.get('winrt_device_id'):
+        raise RuntimeError('Windows 配对项没有可用的设备 ID，无法可靠关联 GATT 设备；请在 Windows 蓝牙设置中移除并重新配对后再扫描。')
+    if not candidate.get('address'):
+        raise RuntimeError('Windows 配对项未提供可验证的蓝牙地址，无法安全关联 GATT 设备。')
     from phase2_readonly import observe
     rec = _Evidence()
     stop, ready = threading.Event(), threading.Event()
     updates = queue.Queue()
     controller = CapabilityOnly(rec, stop, updates)
-    args = SimpleNamespace(address=candidate['address'], allow_cccd=True)
+    args = SimpleNamespace(address=candidate['address'], device_id=candidate['winrt_device_id'], allow_cccd=True)
     await observe(rec, stop, ready, updates, args, controller)
     if rec.errors or not rec.cleanup or rec.device_address != candidate['address'] or controller.caps is None:
         raise RuntimeError('能力检查或安全清理失败：' + '; '.join(rec.errors or ['设备身份未确认']))
@@ -111,6 +243,7 @@ class DeviceSetup:
         self.busy = False
         self.state = 'not_checked'
         self.message = '请点击扫描，选择本机设备；兼容性需单独检查。'
+        self.scan_warnings = []
 
     def _load(self):
         try:
@@ -156,7 +289,7 @@ class DeviceSetup:
                 compatible = False
             except RuntimeError as exc:
                 return {'state': 'failed', 'message': str(exc), 'selected': None, 'compatible': False,
-                        'candidates': self.candidates, 'busy': self.busy}
+                        'candidates': self.candidates, 'busy': self.busy, 'warnings': self.scan_warnings}
             compatible = compatible and self.state != 'failed' and not self.busy
             state, message = self.state, self.message
             if compatible:
@@ -167,7 +300,7 @@ class DeviceSetup:
                 state, message = 'selected', '已保存设备，但兼容性证据未确认或已失效，请重新检查。'
             return {'state': state, 'message': message,
                     'selected': selected, 'compatible': bool(compatible),
-                    'candidates': self.candidates, 'busy': self.busy}
+                    'candidates': self.candidates, 'busy': self.busy, 'warnings': self.scan_warnings}
 
     def _begin(self, state, message):
         with self.lock:
@@ -178,18 +311,43 @@ class DeviceSetup:
     def scan(self):
         self._begin('scanning', '正在扫描 BLE 设备…')
         self.candidates = []
+        self.scan_warnings = []
         try:
-            rows = asyncio.run(self.scanner())
-            unique = {}
+            result = asyncio.run(self.scanner())
+            if isinstance(result, dict):
+                rows = result.get('candidates', [])
+                self.scan_warnings = [str(item) for item in result.get('warnings', [])]
+            else:  # Backwards-compatible injection seam for existing offline tests.
+                rows = result
+            normalized = []
             for row in rows:
-                address = normalize_address(row['address'])
+                try:
+                    address = normalize_address(str(row.get('address') or ''))
+                except ValueError:
+                    continue
                 if not address or address == '000000000000':
                     continue
-                unique[address] = {'id': address, 'address': address, 'name': str(row.get('name') or ''),
-                                   'advertised_services': list(row.get('advertised_services', []))}
+                item = {'id': address, 'address': address, 'name': str(row.get('name') or ''),
+                        'advertised_services': list(row.get('advertised_services') or []),
+                        'paired': row.get('paired') is True,
+                        'connected': row.get('connected'), 'present': row.get('present'),
+                        'winrt_device_id': str(row.get('winrt_device_id') or ''),
+                        'name_source': str(row.get('name_source') or '')}
+                normalized.append(item)
             with self.lock:
-                self.candidates = list(unique.values())
-                self.state, self.message = 'scanned', '请选择设备；广播名称或服务提示不代表已兼容。'
+                self.candidates = merge_device_candidates(
+                    [row for row in normalized if row['paired']],
+                    [row for row in normalized if not row['paired']])
+                paired_g10 = [row for row in self.candidates if row['paired'] and 'g10' in row['name'].casefold()]
+                paired_count = sum(row['paired'] for row in self.candidates)
+                if paired_g10:
+                    self.state, self.message = 'scanned', '已从 Windows 配对设备中找到 G10 候选；仍需连接后验证 ATVV 服务、特征和 codec 2 / 128 字节能力。'
+                elif paired_count:
+                    self.state, self.message = 'scanned', f'已读取 {paired_count} 个 Windows 配对 BLE 设备，但没有名称含 G10 的项目；可按已配对身份查看候选，名称缺失不代表不兼容。'
+                else:
+                    self.state, self.message = 'scanned', '未找到可关联的 Windows 配对 BLE 设备；先在 Windows 设置中确认 G10 已配对，再刷新。广播设备名称和 ATVV 提示都不是兼容性结论。'
+                if self.scan_warnings:
+                    self.message += ' ' + ' '.join(self.scan_warnings)
         except Exception as exc:
             self.state, self.message = 'failed', f'扫描失败，请检查蓝牙、权限和 Windows 配对状态：{exc}'
         finally:
@@ -203,6 +361,8 @@ class DeviceSetup:
             rows = [row for row in self.candidates if row['id'] == identity]
             if len(rows) != 1:
                 raise ValueError('请从当前扫描列表中选择唯一设备。')
+            if rows[0].get('paired') is not True or not rows[0].get('winrt_device_id'):
+                raise ValueError('该项尚未关联到 Windows 配对设备；请先在 Windows 蓝牙设置中配对，然后扫描已配对列表。')
             try:
                 data = self._load()
             except RuntimeError:

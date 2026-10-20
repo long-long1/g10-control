@@ -245,6 +245,8 @@ class BridgeSupervisor:
             detail = backend.get('last_error') or '正在发现 ATVV 服务…'
         route = self.routes.snapshot()
         capture = (route.get('pair') or {}).get('capture', {})
+        device_setup = self.devices.snapshot()
+        selected_device = device_setup.get('selected') or {}
         return {
             'application': {'name': APP_NAME, 'version': '0.1.0-beta', 'single_instance': True},
             'paths': {'data_directory': str(self.root), 'portable': self.paths.portable,
@@ -258,8 +260,8 @@ class BridgeSupervisor:
                         'cable_peak': backend.get('cable_peak', 0) if live_audio else 0,
                         'error_count': backend.get('error_count', 0),
                         'error': backend.get('last_error')},
-            'device_setup': self.devices.snapshot(),
-            'device': {'name': (self.devices.snapshot()['selected'] or {}).get('name') or '未选择设备',
+            'device_setup': device_setup,
+            'device': {'name': selected_device.get('name') or ('已选择的 Windows BLE 设备' if selected_device else '未选择设备'),
                        'address': _display_address(), 'transport': 'Bluetooth LE',
                        'vid': None, 'pid': None, 'battery': None},
             'audio_route': route,

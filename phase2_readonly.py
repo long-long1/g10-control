@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -16,8 +17,48 @@ import uuid
 import winsound
 
 from atvv_protocol import AUDIO, CONTROL, SERVICE, capabilities, command_plan
+from local_config import normalize_address
 
 ROOT=Path(__file__).resolve().parent
+AEP_DEVICE_ADDRESS='System.Devices.Aep.DeviceAddress'
+
+
+def _address_from_windows_id(device_id):
+    match=re.search(r'(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}',str(device_id or ''))
+    if not match:return ''
+    try:return normalize_address(match.group(0))
+    except ValueError:return ''
+
+
+def resolve_paired_device(devices, address, device_id=''):
+    """Resolve a paired Windows BLE record by saved ID or authoritative AEP address."""
+    expected=normalize_address(address)
+    if not expected:raise RuntimeError('所选设备没有有效的蓝牙地址，请重新扫描 Windows 配对列表。')
+    if device_id:
+        targets=[item for item in devices if str(item.id)==str(device_id)]
+        if len(targets)!=1:
+            raise RuntimeError('保存的 Windows 配对设备 ID 已失效；请重新扫描并选择 G10。')
+        item=targets[0]
+        props=getattr(item,'properties',{}) or {}
+        value=props.get(AEP_DEVICE_ADDRESS)
+        try:actual=normalize_address(str(value or '')) if value else ''
+        except ValueError:actual=''
+        actual=actual or _address_from_windows_id(item.id)
+        if actual and actual!=expected:
+            raise RuntimeError('保存的 Windows 设备 ID 当前对应另一蓝牙地址；为防止连接错设备，请重新扫描并选择。')
+        return item
+    matches=[]
+    for item in devices:
+        props=getattr(item,'properties',{}) or {}
+        value=props.get(AEP_DEVICE_ADDRESS)
+        try:actual=normalize_address(str(value or '')) if value else ''
+        except ValueError:actual=''
+        actual=actual or _address_from_windows_id(item.id)
+        if actual==expected:matches.append(item)
+    if len(matches)==1:return matches[0]
+    if len(matches)>1:
+        raise RuntimeError('多个 Windows 配对条目映射到同一蓝牙地址；请在 Windows 蓝牙设置中移除重复配对后重新扫描。')
+    raise RuntimeError('Windows 已配对设备中没有与所选蓝牙地址关联的 BLE 条目；名称和广播提示不参与关联，请重新扫描已配对 G10。')
 
 class Recorder:
     def __init__(self, directory, save_audio=True):
@@ -78,14 +119,19 @@ async def observe(rec, stop, ready, updates, args, controller=None):
     rec.emit('mode',mode='controlled_handshake' if controller else 'readonly',business_writes_enabled=controller is not None,cccd_consent=args.allow_cccd,
              physical_marker='F8 manual proxy; not remote hardware timestamp',poll_ms=10)
     try:
-        ds=await asyncio.wait_for(D.find_all_async_aqs_filter(B.get_device_selector_from_pairing_state(True)),20)
-        targets=[d for d in ds if d.name=='G10' and args.address.lower() in d.id.replace(':','').lower()]
-        if len(targets)!=1:
-            raise RuntimeError(f'Expected one already-paired G10 with address {args.address}, got {len(targets)}')
-        device=await asyncio.wait_for(B.from_id_async(targets[0].id),20)
+        selector=B.get_device_selector_from_pairing_state(True)
+        ds=await asyncio.wait_for(D.find_all_async_aqs_filter_and_additional_properties(
+            selector,[AEP_DEVICE_ADDRESS]),20)
+        target=resolve_paired_device(ds,args.address,getattr(args,'device_id',''))
+        device=await asyncio.wait_for(B.from_id_async(target.id),20)
         if device is None:
             raise RuntimeError('Windows denied device access')
-        rec.emit('device',id=targets[0].id,address=f'{device.bluetooth_address:012X}',status=int(device.connection_status))
+        actual_address=f'{int(device.bluetooth_address):012X}'
+        if normalize_address(actual_address)!=normalize_address(args.address):
+            device.close()
+            device=None
+            raise RuntimeError('Windows 配对设备 ID 打开的 BLE 设备地址与所选地址不一致；已停止，未访问 GATT。')
+        rec.emit('device',id=target.id,address=actual_address,name=target.name,status=int(device.connection_status))
         def connection_changed(sender, unused):
             try:
                 status=int(sender.connection_status)
@@ -323,6 +369,7 @@ def main():
     if not args.allow_cccd:
         p.error('Explicit CCCD approval required; no Bluetooth operations performed')
     args.address=__import__('local_config').require_address(args.address)
+    args.device_id=__import__('local_config').paired_device_id(args.address)
     run_test(args)
 
 if __name__=='__main__':

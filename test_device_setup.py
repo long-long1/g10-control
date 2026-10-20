@@ -4,6 +4,7 @@ from pathlib import Path
 import queue
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -12,7 +13,9 @@ from device_setup import DeviceSetup, CapabilityOnly, PROFILE, validate_evidence
 
 
 def candidate():
-    return {'id': '112233445566', 'address': '112233445566', 'name': 'G10', 'advertised_services': [SERVICE]}
+    return {'id': '112233445566', 'address': '112233445566', 'name': 'G10', 'advertised_services': [],
+            'paired': True, 'connected': True, 'present': True,
+            'winrt_device_id': 'BluetoothLE#paired-device-1', 'name_source': 'windows'}
 
 
 def evidence():
@@ -125,9 +128,111 @@ class DeviceTests(unittest.TestCase):
 
     def test_scanner_adapter_is_called_only_on_request(self):
         from device_setup import scan_candidates
-        dev = Mock(address='11:22:33:44:55:66', name='G10')
-        adv = Mock(local_name='G10', service_uuids=[SERVICE])
-        with patch('bleak.BleakScanner.discover', new=AsyncMock(return_value={'test': (dev, adv)})) as discover:
+        dev = Mock(address='11:22:33:44:55:66', name='')
+        adv = Mock(local_name='', service_uuids=[])
+        with patch('device_setup.enumerate_paired_devices', new=AsyncMock(return_value=([candidate()], []))), \
+             patch('bleak.BleakScanner.discover', new=AsyncMock(return_value={'test': (dev, adv)})) as discover:
             found = asyncio.run(scan_candidates())
-        self.assertEqual(found[0]['address'], '112233445566')
+        self.assertEqual(found['candidates'][0]['address'], '112233445566')
+        self.assertEqual(found['candidates'][0]['name'], 'G10')
+        self.assertTrue(found['candidates'][0]['paired'])
+        self.assertTrue(found['candidates'][0]['connected'])
+        self.assertEqual(found['candidates'][0]['advertised_services'], [])
         discover.assert_awaited_once_with(timeout=5, return_adv=True)
+
+    def test_windows_pair_enumeration_uses_address_and_connection_properties(self):
+        from device_setup import enumerate_paired_devices, AEP_DEVICE_ADDRESS, AEP_IS_CONNECTED, AEP_IS_PRESENT
+        row = SimpleNamespace(id='WindowsPairId', name='G10', properties={
+            AEP_DEVICE_ADDRESS: '11:22:33:44:55:66', AEP_IS_CONNECTED: True, AEP_IS_PRESENT: True})
+        with patch('winrt.windows.devices.bluetooth.BluetoothLEDevice.get_device_selector_from_pairing_state',
+                   return_value='paired-ble-selector') as selector, \
+             patch('winrt.windows.devices.enumeration.DeviceInformation.find_all_async_aqs_filter_and_additional_properties',
+                   new=AsyncMock(return_value=[row])) as find:
+            rows, warnings = asyncio.run(enumerate_paired_devices())
+        selector.assert_called_once_with(True)
+        find.assert_awaited_once_with('paired-ble-selector', [AEP_DEVICE_ADDRESS, AEP_IS_CONNECTED, AEP_IS_PRESENT])
+        self.assertEqual(warnings, [])
+        self.assertEqual(rows[0]['address'], '112233445566')
+        self.assertEqual(rows[0]['winrt_device_id'], 'WindowsPairId')
+        self.assertTrue(rows[0]['paired'] and rows[0]['connected'] and rows[0]['present'])
+
+    def test_pair_is_returned_when_bleak_advertising_scan_fails(self):
+        from device_setup import scan_candidates
+        with patch('device_setup.enumerate_paired_devices', new=AsyncMock(return_value=([candidate()], []))), \
+             patch('bleak.BleakScanner.discover', new=AsyncMock(side_effect=RuntimeError('radio busy'))):
+            result = asyncio.run(scan_candidates())
+        self.assertEqual(len(result['candidates']), 1)
+        self.assertTrue(result['candidates'][0]['paired'])
+        self.assertIn('仍显示 Windows 配对列表', result['warnings'][0])
+
+    def test_paired_g10_sorts_before_anonymous_advertisements(self):
+        from device_setup import merge_device_candidates
+        paired = candidate()
+        paired['connected'] = True
+        rows = merge_device_candidates([paired], [
+            {'address': 'AA:BB:CC:DD:EE:FF', 'name': '', 'advertised_services': []}])
+        self.assertEqual(rows[0]['address'], paired['address'])
+        self.assertEqual(rows[1]['name'], '')
+        self.assertFalse(rows[1]['paired'])
+
+    def test_duplicate_windows_pair_rows_prefer_connected_identity(self):
+        from device_setup import merge_device_candidates
+        sleeping = candidate()
+        sleeping.update(connected=False, winrt_device_id='old-id')
+        connected = candidate()
+        connected.update(connected=True, winrt_device_id='connected-id')
+        rows = merge_device_candidates([sleeping, connected], [])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['winrt_device_id'], 'connected-id')
+        self.assertTrue(rows[0]['connected'])
+
+    def test_paired_g10_is_not_rejected_when_name_and_advertising_are_missing(self):
+        from device_setup import check_candidate
+        paired = candidate()
+        paired.update(name='', name_source='', advertised_services=[])
+
+        async def fake_observe(rec, stop, ready, updates, args, controller):
+            self.assertEqual(args.device_id, paired['winrt_device_id'])
+            self.assertEqual(args.address, paired['address'])
+            rec.device_address = paired['address']
+            rec.cleanup = True
+            controller.caps = Mock(codec=2, frame_size=128, raw_frame_size=128)
+            controller.identity = {TX: 4, AUDIO: 16, CONTROL: 16}
+            controller.raw_capabilities = '0b010002030080'
+
+        with patch('phase2_readonly.observe', new=AsyncMock(side_effect=fake_observe)):
+            result = asyncio.run(check_candidate(paired))
+        self.assertEqual(result['address'], paired['address'])
+        self.assertTrue(result['cleanup_complete'])
+
+    def test_advertisement_only_candidate_cannot_be_selected_or_checked(self):
+        from device_setup import check_candidate
+        advertisement = candidate()
+        advertisement.update(paired=False, connected=None, winrt_device_id='')
+        self.setup = DeviceSetup(self.path, scanner=AsyncMock(return_value=[advertisement]), checker=self.checker)
+        self.setup.scan()
+        with self.assertRaisesRegex(ValueError, 'Windows 配对设备'):
+            self.setup.select(advertisement['id'])
+        with self.assertRaisesRegex(RuntimeError, '仅来自 BLE 广播'):
+            asyncio.run(check_candidate(advertisement))
+
+    def test_windows_pair_identity_matches_by_aep_address_without_name(self):
+        from phase2_readonly import resolve_paired_device, AEP_DEVICE_ADDRESS
+        row = Mock(id='WindowsDeviceId-without-address', name='', properties={AEP_DEVICE_ADDRESS: '11:22:33:44:55:66'})
+        self.assertIs(resolve_paired_device([row], candidate()['address']), row)
+
+    def test_saved_windows_id_is_stable_even_when_it_has_no_mac_in_text(self):
+        from phase2_readonly import resolve_paired_device
+        row = Mock(id='WindowsDeviceId-without-address', name='', properties={})
+        self.assertIs(resolve_paired_device([row], candidate()['address'], row.id), row)
+
+    def test_saved_windows_id_with_mismatched_address_is_rejected(self):
+        from phase2_readonly import resolve_paired_device, AEP_DEVICE_ADDRESS
+        row = Mock(id='WindowsDeviceId', name='G10', properties={AEP_DEVICE_ADDRESS: 'AA:BB:CC:DD:EE:FF'})
+        with self.assertRaisesRegex(RuntimeError, '另一蓝牙地址'):
+            resolve_paired_device([row], candidate()['address'], row.id)
+
+    def test_windows_id_embedded_address_fallback(self):
+        from phase2_readonly import resolve_paired_device
+        row = Mock(id='BluetoothLE#BluetoothLE11:22:33:44:55:66', name='', properties={})
+        self.assertIs(resolve_paired_device([row], candidate()['address']), row)

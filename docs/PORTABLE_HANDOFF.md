@@ -576,3 +576,13 @@ sbom.cdx.json        3fb41b4c4e0cf3c841905fbda54c8dea2c5efd5620407b17cb4de276ba8
 仓库已为 Public；本地 `main` 初始领先远端 18 个提交、落后 0 个提交。所有者本轮明确提供项目目录并授权公开源码，因此旧版交接文档中未含账户名的工作区路径属于已知披露内容；当前文档已将其泛化。推送完成后的 GitHub 最新提交 ID、MIT LICENSE 可见性和最终 ahead/behind 结果将在下方追记。本轮不发布 EXE/ZIP，不创建 Release。
 
 源码及本轮交接预检结果已通过普通 `git push origin main` 同步。源码同步提交为 `b924cee9bb7985e6837639350fdd50204cb60e52`；GitHub API 确认仓库 `visibility=public`、默认分支为 `main`、该提交可见，且根目录 `LICENSE` 可见并以 `MIT License` / `Copyright (c) 2026 WYL` 开头。推送后 `origin/main` 与本地 `main` 一致，ahead/behind 为 0/0。未创建 Release，未上传 EXE 或 ZIP。ATVV 来源授权疑点继续保持未解决状态；本轮同步不表示 MIT 重新授权或法律审查完成。
+
+## 16. Windows 配对 BLE 设备发现修复（2026-10-20）
+
+根因：之前的设备页只使用 Bleak 广播结果，未把 Windows 缓存的已配对 BLE 身份纳入候选；已配对并显示连接的遥控器若当前没有广播名称，便显示为未命名 BLE 项。兼容性检查和后续 WinRT GATT 查找又硬性要求名称恰为 `G10`，并试图在设备 ID 字符串中查找地址，导致名称或 ID 格式不同就拒绝。
+
+现在扫描优先枚举 `BluetoothLEDevice.GetDeviceSelectorFromPairingState(true)`，读取 Windows AEP 地址/连接/在场属性，再与 Bleak 广播按规范化地址合并。候选保留 Windows 设备 ID，并优先显示已配对、名称包含 G10、Windows 报告已连接的设备。若 AEP 地址不可用，则尝试从 Windows ID 提取地址；无法建立关联时给出数量和具体原因。广播名称及 ATVV 广播服务提示仅供显示，不作为兼容门槛。选择时仅接受具有 Windows 配对身份的候选；检查和正式 GATT 观察按保存的 Windows 设备 ID 打开设备，并核验解析出的蓝牙地址匹配。兼容结论仍要求实际 ATVV 服务、TX/AUDIO/CONTROL 特征属性及 codec 2 / 128 字节能力响应。ATVV 命令、ADPCM、WASAPI 算法均未更改。
+
+离线验证：根目录 Python **115/115**、桌面 Python **45/45**、前端 **12/12**，TypeScript 检查和 Vite 构建成功。新增模拟覆盖 Windows 配对属性读取、无名称/无广播提示候选、Windows ID/AEP 地址映射、错误地址拒绝、重复配对项排序、广播扫描失败时仍保留配对候选，以及未配对广播不可选择。没有连接真实 G10、执行 GATT 操作或打开音频流。
+
+实际设备验证步骤：打开桌面程序，点击“扫描 / 刷新设备”；确认 Windows 配对的 G10 排在候选前部并显示配对/连接状态。选择它，确认“检查兼容性”对话框，随后检查结果是否通过。该确认会读取 GATT 服务/特征、临时订阅 AUDIO/CONTROL 通知并恢复原值，发送一次 GET_CAPABILITIES；不会发送 MIC_OPEN 或启动音频。成功条件是找到目标 ATVV 服务、特征属性符合要求且能力响应为 codec 2、128 字节。失败时记录设备页给出的具体错误和本地日志，先不要连续重试；不得把仅显示 G10 名称视为通过。

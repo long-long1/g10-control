@@ -35,5 +35,18 @@ class LocalConfigTests(unittest.TestCase):
             with patch.object(config,'CONFIG',file), patch.dict(os.environ,{'G10_BLUETOOTH_ADDRESS':'AABBCCDDEEFF'}):
                 self.assertEqual(config.address(),'AABBCCDDEEFF')
 
+    def test_paired_device_id_is_returned_only_for_matching_saved_address(self):
+        with tempfile.TemporaryDirectory() as folder:
+            file=Path(folder)/'local.json'
+            file.write_text(json.dumps({'selected_device':{
+                'address':'11:22:33:44:55:66','paired':True,'winrt_device_id':'WindowsPairId'}}),encoding='utf-8')
+            with patch.object(config,'CONFIG',file):
+                self.assertEqual(config.paired_device_id('112233445566'),'WindowsPairId')
+                self.assertEqual(config.paired_device_id('AABBCCDDEEFF'),'')
+            file.write_text(json.dumps({'selected_device':{
+                'address':'112233445566','paired':False,'winrt_device_id':'WindowsPairId'}}),encoding='utf-8')
+            with patch.object(config,'CONFIG',file):
+                self.assertEqual(config.paired_device_id('112233445566'),'')
+
 
 if __name__=='__main__':unittest.main()
